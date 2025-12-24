@@ -15,7 +15,6 @@ NOT responsible for:
 - Action execution (delegated to Model layer)
 """
 
-from collections.abc import Generator
 from types import TracebackType
 from typing import Protocol, TypeVar
 
@@ -99,7 +98,7 @@ class ConnectionProtocol(Protocol[LibraryConnectionT]):
         """
         ...
 
-    def __enter__(self):
+    def __enter__(self) -> "ConnectionProtocol[LibraryConnectionT]":
         """
         Context manager entry.
 
@@ -112,7 +111,7 @@ class ConnectionProtocol(Protocol[LibraryConnectionT]):
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
-    ) -> Generator["ConnectionProtocol[LibraryConnectionT]", None, None]:
+    ) -> bool:
         """
         Context manager exit.
 
