@@ -236,6 +236,10 @@ class SWATConnection(ConnectionProtocol[swat.CAS]):
         open for reuse. Next time __enter__ is called, it will check health
         and reconnect if needed.
 
+        Creating `swat.CAS` instance is resource-intensive,
+        To optimize performance, the connection is kept open for reuse.
+        The `is_healthy()` method will verify connection health on next use.
+
         Returns:
             False to propagate exceptions
         """
