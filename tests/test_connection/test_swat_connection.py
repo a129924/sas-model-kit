@@ -414,52 +414,16 @@ class TestSWATConnectionContextManager:
                 raise RuntimeError("Test error")
 
 
-class TestSWATConnectionGetOperation:
-    """Test operation adapter factory method."""
+class TestSWATConnectionType:
+    """Test connection type attribute."""
 
-    @patch("sas_model_kit.connection.swat.connection.swat.CAS")
-    @patch("sas_model_kit.operation.swat.isinstance")
-    def test_get_operation_success(self, mock_isinstance, mock_cas_class):
-        """Test getting operation adapter when connected."""
-        # Setup mocks
-        mock_session = Mock()
-        mock_session.serverstatus.return_value = {"status": "ok"}
-        mock_cas_class.return_value = mock_session
-        mock_isinstance.return_value = True  # Make isinstance check pass
+    def test_connection_type_is_swat(self):
+        """Test that SWATConnection has correct connection_type."""
+        from sas_model_kit.connection.base import ConnectionType
 
-        # Connect and get operation
+        # Check class attribute
+        assert SWATConnection.connection_type == ConnectionType.SWAT
+
+        # Check instance can access it
         connection = SWATConnection("hostname", 5570)
-        connection.connect()
-        operation = connection.get_operation()
-
-        # Verify operation adapter is created
-        from sas_model_kit.operation.swat import SWATOperationAdapter
-
-        assert isinstance(operation, SWATOperationAdapter)
-        assert operation._session is mock_session
-
-    def test_get_operation_when_not_connected(self):
-        """Test getting operation when not connected."""
-        connection = SWATConnection("hostname", 5570)
-
-        with pytest.raises(ConnectionError, match="Connection not established"):
-            connection.get_operation()
-
-    @patch("sas_model_kit.connection.swat.connection.swat.CAS")
-    def test_get_operation_when_unhealthy(self, mock_cas_class):
-        """Test getting operation when connection is unhealthy."""
-        # Setup mock
-        mock_session = Mock()
-        mock_session.serverstatus.return_value = {"status": "ok"}
-        mock_cas_class.return_value = mock_session
-
-        # Connect
-        connection = SWATConnection("hostname", 5570)
-        connection.connect()
-
-        # Make connection unhealthy
-        mock_session.serverstatus.side_effect = Exception("Connection lost")
-
-        # Should raise error
-        with pytest.raises(ConnectionError, match="Connection is not healthy"):
-            connection.get_operation()
+        assert connection.connection_type == ConnectionType.SWAT

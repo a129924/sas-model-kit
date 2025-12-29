@@ -11,10 +11,10 @@ import swat
 from pandas import DataFrame
 from typing_extensions import override
 
-from sas_model_kit.operation.base import OperationProtocol
+from sas_model_kit.operation.base import BaseOperation
 
 
-class SWATOperationAdapter(OperationProtocol[DataFrame]):
+class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame]):
     """
     SWAT-specific operation adapter.
 
@@ -30,19 +30,15 @@ class SWATOperationAdapter(OperationProtocol[DataFrame]):
         >>> result = operation.call_action('astore.score', ...)
     """
 
-    def __init__(self, session: swat.CAS) -> None:
-        """
-        Initialize adapter with SWAT session.
-
-        Args:
-            session: SWAT CAS session object
-
-        Raises:
-            TypeError: If session is not a swat.CAS instance
-        """
-        if not isinstance(session, swat.CAS):
-            raise TypeError(f"Expected swat.CAS instance, got {type(session).__name__}")
-        self._session = session
+    @override
+    def _check_connection_type(self, connection: Any) -> None:
+        if not connection:
+            raise ValueError("Connection cannot be None")
+        if not isinstance(connection, swat.CAS):
+            raise TypeError(
+                f"SWATOperationAdapter requires a swat.CAS connection, "
+                f"got {type(connection).__name__}"
+            )
 
     @override
     def call_action(self, action_name: str, **kwargs: Any) -> Any:

@@ -9,10 +9,10 @@ Connection responsibilities:
 - Check session health
 - Auto-reconnect if disconnected
 - Provide session access for operations
-- Create operation adapter via factory method
 
 NOT responsible for:
-- Data upload/download (delegated to data_management layer)
+- Operation adapter creation (delegated to OperationFactory)
+- Data upload/download (delegated to DataSource layer)
 - Action execution (delegated to Operation layer)
 """
 
@@ -23,18 +23,18 @@ except ImportError:
         "SWAT is required for SWATConnection. Install it with: pip install swat"
     ) from ImportError
 
-from sas_model_kit.connection.base import ConnectionProtocol
-from sas_model_kit.operation.swat import SWATOperationAdapter
+from sas_model_kit.connection.base import ConnectionType, SessionProtocol
 
 
-class SWATConnection(ConnectionProtocol[swat.CAS]):
+class SWATConnection(SessionProtocol[swat.CAS]):
     """
-    SWAT implementation of ConnectionProtocol.
+    SWAT implementation of SessionProtocol.
 
     This class manages the lifecycle of a swat.CAS session, following SRP
     by focusing only on connection management.
 
     Attributes:
+        connection_type: Class variable identifying this as SWAT connection
         hostname: CAS server hostname
         port: CAS server port
         username: Username for authentication (optional)
@@ -47,14 +47,17 @@ class SWATConnection(ConnectionProtocol[swat.CAS]):
         >>> connection.connect()
         >>> if connection.is_healthy():
         ...     session = connection.get_session()
-        ...     # Use session for operations
+        ...     # Create operation via factory
+        ...     operation = OperationFactory.create(connection)
         >>> connection.close()
 
         >>> # Context manager (recommended)
         >>> with SWATConnection('hostname', 5570) as connection:
-        ...     session = connection.get_session()
-        ...     # Auto-checks health and reconnects if needed
+        ...     operation = OperationFactory.create(connection)
+        ...     # Use operation for actions
     """
+
+    connection_type = ConnectionType.SWAT
 
     def __init__(
         self,
@@ -209,30 +212,6 @@ class SWATConnection(ConnectionProtocol[swat.CAS]):
             raise ConnectionError("Connection is not healthy. Call reconnect().")
 
         return self._session
-
-    def get_operation(self) -> SWATOperationAdapter:
-        """
-        Get operation adapter for executing actions.
-
-        Factory method that creates a SWATOperationAdapter for the current
-        session. This follows the Adapter Pattern to provide a unified
-        operation interface across different connection types.
-
-        Returns:
-            SWATOperationAdapter instance for this connection
-
-        Raises:
-            ConnectionError: If connection is not established or unhealthy
-
-        Example:
-            >>> with SWATConnection('server', 5570) as conn:
-            ...     operation = conn.get_operation()
-            ...     result = operation.call_action('astore.score', ...)
-        """
-        # Ensure we have a healthy session first
-        session = self.get_session()
-
-        return SWATOperationAdapter(session)
 
     def __enter__(self) -> "SWATConnection":
         """

@@ -43,5 +43,5 @@ class TestSWATOperationAdapterInit:
         with pytest.raises(TypeError) as exc_info:
             SWATOperationAdapter(invalid_session)
 
-        assert "Expected swat.CAS instance" in str(exc_info.value)
+        assert "SWATOperationAdapter requires a swat.CAS connection" in str(exc_info.value)
         assert "got str" in str(exc_info.value)

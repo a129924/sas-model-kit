@@ -10,9 +10,11 @@ Operation responsibilities:
 - NOT responsible for: Connection lifecycle (delegated to SessionProtocol)
 """
 
-from typing import Any, Protocol, TypeVar
+from abc import ABC, abstractmethod
+from typing import Any, Final, Generic, Protocol, TypeVar
 
 ReSourceType = TypeVar("ReSourceType", contravariant=True)
+LibraryConnectionT = TypeVar("LibraryConnectionT", covariant=True)
 
 
 class OperationProtocol(
@@ -83,3 +85,65 @@ class OperationProtocol(
             >>> operation.upload_data(df, caslib='public', table='my_data')
         """
         ...
+
+
+class BaseOperation(
+    ABC, OperationProtocol[ReSourceType], Generic[LibraryConnectionT, ReSourceType]
+):
+    """
+    Abstract base class for operation implementations.
+
+    This class provides a skeletal implementation of the OperationProtocol
+    to minimize the effort required to implement this interface.
+
+    Subclasses must implement the abstract methods defined here.
+
+    Methods:
+        call_action(): Execute a SAS action
+        upload_data(): Upload data to server
+
+    Example:
+        >>> class MyOperation
+        ...     (BaseOperation):
+        ...     def call_action(self, action_name: str, **kwargs: Any) -> Any:
+        ...         # Implement action execution logic
+        ...         pass
+        ...     def upload_data(self, data: Any, caslib: str, table: str) -> None:
+        ...         # Implement data upload logic
+        ...         pass
+    """
+
+    def __init__(self, connection: LibraryConnectionT) -> None:
+        """
+        Initialize operation with library connection.
+
+        Args:
+            connection: Library connection instance
+
+        Example:
+            >>> operation = MyOperation(connection)
+        """
+        self._check_connection_type(connection)
+
+        self._session: Final[LibraryConnectionT] = connection
+
+    @abstractmethod
+    def _check_connection_type(self, connection: Any) -> None:
+        """
+        Validate connection type.
+
+        Args:
+            connection: Connection instance to validate
+
+        Raises:
+            TypeError: If connection type is invalid
+
+        Example:
+            >>> cls._check_connection_type(connection)
+        """
+        ...
+
+    @abstractmethod
+    def call_action(self, action_name: str, **kwargs: Any) -> Any: ...
+    @abstractmethod
+    def upload_data(self, data: ReSourceType, caslib: str, table: str) -> None: ...
