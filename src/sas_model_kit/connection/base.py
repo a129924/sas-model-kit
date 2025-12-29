@@ -1,7 +1,7 @@
 """
 Connection protocol definition.
 
-This module defines the ConnectionProtocol interface that all connection
+This module defines the SessionProtocol interface that all connection
 implementations must follow (SRP - Single Responsibility Principle).
 
 Connection responsibilities:
@@ -11,22 +11,40 @@ Connection responsibilities:
 - Provide access to underlying session
 
 NOT responsible for:
-- Data upload/download (delegated to data_management layer)
-- Action execution (delegated to Model layer)
+- Operation adapter creation (delegated to OperationFactory)
+- Data upload/download (delegated to DataSource layer)
+- Action execution (delegated to Operation layer)
 """
 
+from enum import Enum, auto
 from types import TracebackType
-from typing import Protocol, TypeVar
+from typing import ClassVar, Protocol, TypeVar
 
 LibraryConnectionT = TypeVar("LibraryConnectionT", covariant=True)
 
 
-class ConnectionProtocol(Protocol[LibraryConnectionT]):
+class ConnectionType(Enum):
     """
-    Protocol for connection implementations.
+    Enumeration of supported connection types.
+
+    Used by OperationFactory to determine which OperationAdapter to create.
+    """
+
+    SWAT = auto()
+    SASCTL = auto()
+    HTTPX = auto()
+
+
+class SessionProtocol(Protocol[LibraryConnectionT]):
+    """
+    Protocol for session/connection implementations.
 
     All connection classes (SWAT, SASCTL, HTTPx) must implement this interface
     following the Single Responsibility Principle.
+
+    Attributes:
+        connection_type: Class variable identifying the connection type.
+                        Used by OperationFactory for adapter creation.
 
     Methods:
         connect(): Establish connection to server
@@ -37,12 +55,14 @@ class ConnectionProtocol(Protocol[LibraryConnectionT]):
 
     Example:
         >>> # Any implementation following this protocol
-        >>> connection: ConnectionProtocol = SWATConnection('host', 5570)
+        >>> connection: SessionProtocol = SWATConnection('host', 5570)
         >>> with connection:
         ...     session = connection.get_session()
-        ...     # Use session for data/action operations
+        ...     # Create operation via factory
+        ...     operation = OperationFactory.create(connection)
     """
 
+    connection_type: ClassVar[ConnectionType]
     _session: LibraryConnectionT | None = None
 
     def connect(self) -> None:
@@ -98,7 +118,7 @@ class ConnectionProtocol(Protocol[LibraryConnectionT]):
         """
         ...
 
-    def __enter__(self) -> "ConnectionProtocol[LibraryConnectionT]":
+    def __enter__(self) -> "SessionProtocol[LibraryConnectionT]":
         """
         Context manager entry.
 
