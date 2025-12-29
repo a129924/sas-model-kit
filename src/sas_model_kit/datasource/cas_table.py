@@ -175,6 +175,9 @@ class CASTableDataSource(DataSourceProtocol[pd.DataFrame]):
                     f"Unexpected result format from table.fetch: {type(result)}"
                 )
 
+        except (ValueError, TypeError):
+            # Re-raise validation errors as-is
+            raise
         except Exception as e:
             raise RuntimeError(
                 f"Failed to fetch result from {caslib}.{table}: {e}"
