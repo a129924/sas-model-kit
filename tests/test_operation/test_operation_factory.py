@@ -8,7 +8,7 @@ verifying:
 - Connection health checks before creation
 """
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
