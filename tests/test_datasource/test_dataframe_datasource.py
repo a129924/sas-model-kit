@@ -39,7 +39,7 @@ class TestDataFrameDataSourceInit:
 
         # Act & Assert
         with pytest.raises(TypeError) as exc_info:
-            DataFrameDataSource(invalid_data, "public", "data")
+            DataFrameDataSource(invalid_data, "public", "data")  # type: ignore
 
         assert "Expected pandas DataFrame" in str(exc_info.value)
         assert "got dict" in str(exc_info.value)

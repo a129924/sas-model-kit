@@ -15,7 +15,7 @@ from sas_model_kit.datasource.base import DataSourceProtocol
 from sas_model_kit.operation.base import OperationProtocol
 
 
-class JSONDataSource:
+class JSONDataSource(DataSourceProtocol[dict[str, Any] | list[dict[str, Any]]]):
     """
     Data source for JSON-serializable data.
 
@@ -61,9 +61,9 @@ class JSONDataSource:
 
     def __init__(
         self,
-        data: pd.DataFrame | dict,
+        data: pd.DataFrame | dict[str, Any] | list[dict[str, Any]],
         caslib: str,
-        table: str
+        table: str,
     ) -> None:
         """
         Initialize JSON data source.
@@ -82,9 +82,7 @@ class JSONDataSource:
             >>> datasource = JSONDataSource(df, 'public', 'my_data')
         """
         if not isinstance(data, (pd.DataFrame, dict)):
-            raise TypeError(
-                f"Expected DataFrame or dict, got {type(data).__name__}"
-            )
+            raise TypeError(f"Expected DataFrame or dict, got {type(data).__name__}")
 
         if not caslib or not caslib.strip():
             raise ValueError("caslib cannot be empty")
@@ -121,22 +119,13 @@ class JSONDataSource:
             else:
                 upload_data = self._data
 
-            operation.upload_data(
-                upload_data,
-                caslib=self._caslib,
-                table=self._table
-            )
+            operation.upload_data(upload_data, caslib=self._caslib, table=self._table)
         except Exception as e:
-            raise RuntimeError(
-                f"Failed to prepare JSON data source: {e}"
-            ) from e
+            raise RuntimeError(f"Failed to prepare JSON data source: {e}") from e
 
     @override
     def fetch_result(
-        self,
-        operation: OperationProtocol,
-        caslib: str,
-        table: str
+        self, operation: OperationProtocol, caslib: str, table: str
     ) -> dict:
         """
         Fetch results from CAS as dictionary.
@@ -167,14 +156,13 @@ class JSONDataSource:
         try:
             # Use table.fetch action to retrieve data
             result = operation.call_action(
-                'table.fetch',
-                table={'name': table, 'caslib': caslib}
+                "table.fetch", table={"name": table, "caslib": caslib}
             )
 
             # Extract DataFrame from CASResults
             # SWAT returns results in result['Fetch'] format
-            if hasattr(result, '__getitem__') and 'Fetch' in result:
-                df = result['Fetch']
+            if hasattr(result, "__getitem__") and "Fetch" in result:
+                df = result["Fetch"]
 
                 if not isinstance(df, pd.DataFrame):
                     raise ValueError(
@@ -183,13 +171,16 @@ class JSONDataSource:
 
                 # Convert DataFrame to dict (records format)
                 # to_dict(orient='list') gives {'col': [values]}
-                return df.to_dict(orient='list')
+                return df.to_dict(orient="list")
 
             else:
                 raise ValueError(
                     f"Unexpected result format from table.fetch: {type(result)}"
                 )
 
+        except (ValueError, TypeError):
+            # Re-raise validation errors as-is
+            raise
         except Exception as e:
             raise RuntimeError(
                 f"Failed to fetch result from {caslib}.{table}: {e}"
