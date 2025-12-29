@@ -8,9 +8,8 @@ Tests the SWAT-specific operation adapter implementation, verifying:
 - Error handling and edge cases
 """
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
-import pandas as pd
 import pytest
 
 from sas_model_kit.operation.swat import SWATOperationAdapter
@@ -22,12 +21,12 @@ class TestSWATOperationAdapterInit:
     def test_init_with_valid_session(self):
         """Should initialize successfully with valid swat.CAS session."""
         # Arrange
-        mock_session = MagicMock(spec=['__class__'])
-        mock_session.__class__.__name__ = 'CAS'
-        mock_session.__class__.__module__ = 'swat'
+        mock_session = MagicMock(spec=["__class__"])
+        mock_session.__class__.__name__ = "CAS"
+        mock_session.__class__.__module__ = "swat"
 
         # Patch isinstance to return True for our mock
-        with patch('sas_model_kit.operation.swat.isinstance', return_value=True):
+        with patch("sas_model_kit.operation.swat.isinstance", return_value=True):
             # Act
             adapter = SWATOperationAdapter(mock_session)
 
@@ -41,7 +40,9 @@ class TestSWATOperationAdapterInit:
 
         # Act & Assert
         with pytest.raises(TypeError) as exc_info:
-            SWATOperationAdapter(invalid_session)
+            SWATOperationAdapter(invalid_session)  # type: ignore
 
-        assert "SWATOperationAdapter requires a swat.CAS connection" in str(exc_info.value)
+        assert "SWATOperationAdapter requires a swat.CAS connection" in str(
+            exc_info.value
+        )
         assert "got str" in str(exc_info.value)
