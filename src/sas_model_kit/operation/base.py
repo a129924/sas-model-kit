@@ -32,12 +32,16 @@ class OperationProtocol(
     Methods:
         call_action(): Execute a SAS action
         upload_data(): Upload data to server
+        table_exists(): Check if table exists in CAS library
+        model_exists(): Check if model (ASTORE) exists in CAS library
 
     Example:
         >>> # SWATOperationAdapter implements this protocol
         >>> operation: OperationProtocol = connection.get_operation()
         >>> result = operation.call_action('astore.score', table='input', ...)
         >>> operation.upload_data(df, caslib='public', table='data')
+        >>> if operation.table_exists('public', 'my_table'):
+        ...     print("Table exists")
     """
 
     def call_action(self, action_name: str, **kwargs: Any) -> Any:
@@ -83,6 +87,40 @@ class OperationProtocol(
             >>> import pandas as pd
             >>> df = pd.DataFrame({'a': [1, 2], 'b': [3, 4]})
             >>> operation.upload_data(df, caslib='public', table='my_data')
+        """
+        ...
+
+    def table_exists(self, caslib: str, table: str) -> bool:
+        """
+        Check if a table exists in the specified CAS library.
+
+        Args:
+            caslib: CAS library name
+            table: Table name to check
+
+        Returns:
+            True if table exists, False otherwise
+
+        Example:
+            >>> if operation.table_exists('public', 'my_data'):
+            ...     print("Table exists")
+        """
+        ...
+
+    def model_exists(self, caslib: str, table: str) -> bool:
+        """
+        Check if a model (ASTORE) exists in the specified CAS library.
+
+        Args:
+            caslib: CAS library name containing models
+            table: Model table name (ASTORE) to check
+
+        Returns:
+            True if model exists, False otherwise
+
+        Example:
+            >>> if operation.model_exists('models', 'my_astore'):
+            ...     print("Model exists")
         """
         ...
 
@@ -147,3 +185,7 @@ class BaseOperation(
     def call_action(self, action_name: str, **kwargs: Any) -> Any: ...
     @abstractmethod
     def upload_data(self, data: ReSourceType, caslib: str, table: str) -> None: ...
+    @abstractmethod
+    def table_exists(self, caslib: str, table: str) -> bool: ...
+    @abstractmethod
+    def model_exists(self, caslib: str, table: str) -> bool: ...

@@ -137,3 +137,56 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame]):
 
         except Exception as e:
             raise RuntimeError(f"Failed to upload data to {caslib}.{table}: {e}") from e
+
+    @override
+    def table_exists(self, caslib: str, table: str) -> bool:
+        """
+        Check if a table exists in the specified CAS library.
+
+        Uses SWAT's table.tableExists action to verify table presence.
+
+        Args:
+            caslib: CAS library name
+            table: Table name to check
+
+        Returns:
+            True if table exists, False otherwise
+
+        Example:
+            >>> if adapter.table_exists('public', 'my_data'):
+            ...     print("Table exists")
+        """
+        try:
+            result = self._session.table.tableExists(
+                caslib=caslib,
+                name=table,
+            )
+
+            # SWAT returns CASResults with 'exists' key
+            return bool(result.get("exists", 0))
+
+        except Exception:
+            # If action fails, assume table doesn't exist
+            return False
+
+    @override
+    def model_exists(self, caslib: str, table: str) -> bool:
+        """
+        Check if a model (ASTORE) exists in the specified CAS library.
+
+        Uses SWAT's table.tableExists action since ASTORE models are
+        stored as CAS tables.
+
+        Args:
+            caslib: CAS library name containing models
+            table: Model table name (ASTORE) to check
+
+        Returns:
+            True if model exists, False otherwise
+
+        Example:
+            >>> if adapter.model_exists('models', 'my_astore'):
+            ...     print("Model exists")
+        """
+        # ASTORE models are CAS tables, so we can reuse table_exists
+        return self.table_exists(caslib, table)

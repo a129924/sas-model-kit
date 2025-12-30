@@ -5,7 +5,7 @@ the StreamableResult protocol, enabling consistent result handling
 across different SAS operation types.
 """
 
-from collections.abc import Generator, Iterator
+from collections.abc import Iterator
 from typing import Any
 
 from typing_extensions import override
@@ -68,7 +68,7 @@ class CASTableResult(StreamableResult):
             yield row.to_dict()
 
     @override
-    def stream(self, batch_size: int = 1000) -> Generator[list[dict[str, Any]]]:
+    def stream(self, batch_size: int = 1000) -> Iterator[list[dict[str, Any]]]:
         """Stream records in batches for memory-efficient processing.
 
         Args:
@@ -76,16 +76,23 @@ class CASTableResult(StreamableResult):
                 Defaults to 1000.
 
         Yields:
-            Dictionary representation of each record in batches
+            List of dictionary representations for each batch
 
         Examples:
             >>> result = CASTableResult(table)
-            >>> for record in result.stream(batch_size=500):
-            ...     process(record)
+            >>> for batch in result.stream(batch_size=500):
+            ...     process_batch(batch)  # batch is list[dict]
         """
-        for _, row in self._table.iterrows(chunksize=batch_size):
-            # row: DataFrame with chunk_size rows
-            yield row.to_dict("records")
+        batch: list[dict[str, Any]] = []
+        for _, row in self._table.iterrows():
+            batch.append(row.to_dict())
+            if len(batch) >= batch_size:
+                yield batch
+                batch = []
+
+        # Yield remaining records
+        if batch:
+            yield batch
 
     @override
     def to_records(self) -> list[dict[str, Any]]:
@@ -103,4 +110,4 @@ class CASTableResult(StreamableResult):
             >>> records = result.to_records()
             >>> df = pd.DataFrame(records)
         """
-        return self._table.to_dict("records")
+        return [row.to_dict() for _, row in self._table.iterrows()]
