@@ -108,6 +108,13 @@ def test_swat_model_result_get_table_on_error() -> None:
 
 def test_swat_model_result_to_records(mock_cas_table: CASTable) -> None:
     """Test converting result to list of records."""
+    # Reset the mock's iterator for this test
+    test_data = [
+        (0, MagicMock(to_dict=lambda: {"id": 1, "score": 95})),
+        (1, MagicMock(to_dict=lambda: {"id": 2, "score": 87})),
+    ]
+    mock_cas_table.iterrows.return_value = iter(test_data)
+
     result = SwatModelResult.from_table(mock_cas_table)
 
     records = result.to_records()
@@ -149,6 +156,13 @@ def test_swat_model_result_iteration_via_data(
     mock_cas_table: CASTable,
 ) -> None:
     """Test iterating through data via the result."""
+    # Reset the mock's iterator for this test
+    test_data = [
+        (0, MagicMock(to_dict=lambda: {"id": 1, "score": 95})),
+        (1, MagicMock(to_dict=lambda: {"id": 2, "score": 87})),
+    ]
+    mock_cas_table.iterrows.return_value = iter(test_data)
+
     result = SwatModelResult.from_table(mock_cas_table)
 
     records = list(result.data)

@@ -60,12 +60,16 @@ def test_cas_table_result_stream(mock_cas_table: CASTable) -> None:
     """Test streaming with batch size."""
     result = CASTableResult(mock_cas_table)
 
-    # Stream with batch_size=2 should yield first 2 records
+    # Stream with batch_size=2 should yield batches of 2 records
     batches = list(result.stream(batch_size=2))
 
+    # Should have 2 batches: [0-1] and [2]
     assert len(batches) == 2
+    assert len(batches[0]) == 2
     assert batches[0][0] == {"id": 1, "name": "Alice"}
     assert batches[0][1] == {"id": 2, "name": "Bob"}
+    assert len(batches[1]) == 1
+    assert batches[1][0] == {"id": 3, "name": "Charlie"}
 
 
 def test_cas_table_result_stream_default_batch(
@@ -74,10 +78,11 @@ def test_cas_table_result_stream_default_batch(
     """Test streaming with default batch size."""
     result = CASTableResult(mock_cas_table)
 
-    # With default batch_size=1000, should get all 3 records
-    records = list(result.stream())
+    # With default batch_size=1000, all 3 records fit in one batch
+    batches = list(result.stream())
 
-    assert len(records) == 3
+    assert len(batches) == 1
+    assert len(batches[0]) == 3
 
 
 def test_cas_table_result_to_records(mock_cas_table: CASTable) -> None:
