@@ -27,6 +27,14 @@ def mock_cas_table() -> CASTable:
 
     table.iterrows.return_value = iter(test_data)
 
+    # Mock to_dict('records') method for pandas-style access
+    test_records = [
+        {"id": 1, "name": "Alice"},
+        {"id": 2, "name": "Bob"},
+        {"id": 3, "name": "Charlie"},
+    ]
+    table.to_dict.return_value = test_records
+
     return table
 
 

@@ -83,16 +83,13 @@ class CASTableResult(StreamableResult):
             >>> for batch in result.stream(batch_size=500):
             ...     process_batch(batch)  # batch is list[dict]
         """
-        batch: list[dict[str, Any]] = []
-        for _, row in self._table.iterrows():
-            batch.append(row.to_dict())
-            if len(batch) >= batch_size:
-                yield batch
-                batch = []
+        # Convert entire table to list of dicts using SWAT's to_dict('records')
+        # which aligns with pandas DataFrame.to_dict('records') format
+        records = self._table.to_dict('records')
 
-        # Yield remaining records
-        if batch:
-            yield batch
+        # Yield in batches
+        for i in range(0, len(records), batch_size):
+            yield records[i : i + batch_size]
 
     @override
     def to_records(self) -> list[dict[str, Any]]:
@@ -110,4 +107,4 @@ class CASTableResult(StreamableResult):
             >>> records = result.to_records()
             >>> df = pd.DataFrame(records)
         """
-        return [row.to_dict() for _, row in self._table.iterrows()]
+        return self._table.to_dict('records')
