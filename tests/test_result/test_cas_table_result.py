@@ -18,22 +18,44 @@ def mock_cas_table() -> CASTable:
     """Create a mock CASTable for testing."""
     table = MagicMock()
 
-    # Mock iterrows() to return test data
-    test_data = [
+    # Mock iterrows() for row-by-row iteration
+    row_data = [
         (0, MagicMock(to_dict=lambda any_key=None: {"id": 1, "name": "Alice"})),
         (1, MagicMock(to_dict=lambda any_key=None: {"id": 2, "name": "Bob"})),
         (2, MagicMock(to_dict=lambda any_key=None: {"id": 3, "name": "Charlie"})),
     ]
+    table.iterrows.return_value = iter(row_data)
 
-    table.iterrows.return_value = iter(test_data)
+    # Mock iterrows(chunksize=N) for batch iteration
+    # When chunksize is specified, create DataFrame batches
+    def mock_iterrows_with_chunksize(chunksize=None):
+        if chunksize is None:
+            # Row-by-row iteration
+            return iter(row_data)
+        else:
+            # Batch iteration: return (index, DataFrame) pairs
+            all_records = [
+                {"id": 1, "name": "Alice"},
+                {"id": 2, "name": "Bob"},
+                {"id": 3, "name": "Charlie"},
+            ]
+            batches = []
+            for i in range(0, len(all_records), chunksize):
+                batch = all_records[i : i + chunksize]
+                # Create a mock DataFrame for the batch
+                batch_df = MagicMock()
+                batch_df.to_dict.return_value = batch
+                batches.append((0, batch_df))  # index 0 for simplicity
+            return iter(batches)
 
-    # Mock to_dict('records') method for pandas-style access
-    test_records = [
+    table.iterrows.side_effect = mock_iterrows_with_chunksize
+
+    # Mock to_dict('records') for the entire table
+    table.to_dict.return_value = [
         {"id": 1, "name": "Alice"},
         {"id": 2, "name": "Bob"},
         {"id": 3, "name": "Charlie"},
     ]
-    table.to_dict.return_value = test_records
 
     return table
 
