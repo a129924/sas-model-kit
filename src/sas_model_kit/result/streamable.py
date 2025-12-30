@@ -12,7 +12,7 @@ StreamableResult responsibilities:
 """
 
 from collections.abc import Iterator
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -64,7 +64,7 @@ class StreamableResult(Protocol):
         """
         ...
 
-    def stream(self, batch_size: int = 1000) -> Iterator[dict]:
+    def stream(self, batch_size: int = 1000) -> Iterator[list[dict[str, Any]]]:
         """
         Stream result data in batches.
 
