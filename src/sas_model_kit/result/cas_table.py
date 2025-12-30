@@ -71,8 +71,11 @@ class CASTableResult(StreamableResult):
     def stream(self, batch_size: int = 1000) -> Iterator[list[dict[str, Any]]]:
         """Stream records in batches for memory-efficient processing.
 
+        Leverages SWAT's iterrows(chunksize=N) to fetch batches efficiently
+        from the server, avoiding loading entire table into memory.
+
         Args:
-            batch_size: Number of records to yield per batch.
+            batch_size: Number of records to fetch per batch.
                 Defaults to 1000.
 
         Yields:
@@ -83,13 +86,11 @@ class CASTableResult(StreamableResult):
             >>> for batch in result.stream(batch_size=500):
             ...     process_batch(batch)  # batch is list[dict]
         """
-        # Convert entire table to list of dicts using SWAT's to_dict('records')
-        # which aligns with pandas DataFrame.to_dict('records') format
-        records = self._table.to_dict('records')
-
-        # Yield in batches
-        for i in range(0, len(records), batch_size):
-            yield records[i : i + batch_size]
+        # Use SWAT's iterrows(chunksize=N) for efficient server-side batch fetching
+        # When chunksize is specified, iterrows returns a DataFrame, not a Series
+        for _, batch_df in self._table.iterrows(chunksize=batch_size):
+            # batch_df is a DataFrame containing up to batch_size rows
+            yield batch_df.to_dict('records')
 
     @override
     def to_records(self) -> list[dict[str, Any]]:
