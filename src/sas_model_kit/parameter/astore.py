@@ -18,17 +18,16 @@ class AstoreParameter(BaseModelParameter):
     """Parameters for ASTORE model execution.
 
     Extends BaseModelParameter with ASTORE-specific fields for
-    model store location and optional code configuration.
+    model store location and SAS evaluation code.
 
     Attributes:
         source_caslib: Source data CAS library
         source_table: Source data CAS table
         target_caslib: Target output CAS library
         target_table: Target output CAS table
-        model_caslib: Model store CAS library
-        model_table: Model store CAS table (ASTORE)
-        code_caslib: Optional code CAS library
-        code_table: Optional code CAS table
+        model_caslib: Model store CAS library (where ASTORE is stored)
+        model_table: Model store CAS table (ASTORE binary model)
+        score_code: SAS evaluation code (from dmcas_epscorecode.sas)
 
     Examples:
         >>> param = AstoreParameter(
@@ -38,14 +37,14 @@ class AstoreParameter(BaseModelParameter):
         ...     target_table="scored_data",
         ...     model_caslib="models",
         ...     model_table="my_astore",
+        ...     score_code="proc astore; ... run;",
         ... )
         >>> param.validate()
     """
 
     model_caslib: str
     model_table: str
-    code_caslib: str = ""
-    code_table: str = ""
+    score_code: str
 
     @override
     def validate(self) -> None:
@@ -66,8 +65,6 @@ class AstoreParameter(BaseModelParameter):
             msg = "model_table cannot be empty"
             raise ValueError(msg)
 
-        # code_caslib and code_table are optional
-        # But if one is provided, both should be provided
-        if bool(self.code_caslib) != bool(self.code_table):
-            msg = "Both code_caslib and code_table must be provided together"
+        if not self.score_code:
+            msg = "score_code cannot be empty"
             raise ValueError(msg)

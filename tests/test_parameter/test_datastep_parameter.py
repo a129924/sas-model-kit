@@ -14,72 +14,27 @@ def test_datastep_parameter_creation() -> None:
         source_table="raw_data",
         target_caslib="public",
         target_table="processed_data",
-        code="data output; set input; run;",
+        score_code="new_var = var1 * 2;",
     )
 
     assert param.source_caslib == "public"
     assert param.source_table == "raw_data"
     assert param.target_caslib == "public"
     assert param.target_table == "processed_data"
-    assert param.code == "data output; set input; run;"
-    assert param.max_threads == 1
+    assert param.score_code == "new_var = var1 * 2;"
 
 
-def test_datastep_parameter_with_threads() -> None:
-    """Test DataStepParameter with custom max_threads."""
+def test_datastep_parameter_validates_score_code() -> None:
+    """Test validation of score_code field."""
     param = DataStepParameter(
         source_caslib="public",
         source_table="raw_data",
         target_caslib="public",
         target_table="processed_data",
-        code="data output; set input; run;",
-        max_threads=4,
+        score_code="",  # Invalid: empty
     )
 
-    assert param.max_threads == 4
-
-
-def test_datastep_parameter_validates_code() -> None:
-    """Test validation of code field."""
-    param = DataStepParameter(
-        source_caslib="public",
-        source_table="raw_data",
-        target_caslib="public",
-        target_table="processed_data",
-        code="",  # Invalid: empty
-    )
-
-    with pytest.raises(ValueError, match="code cannot be empty"):
-        param.validate()
-
-
-def test_datastep_parameter_validates_max_threads_positive() -> None:
-    """Test validation of max_threads must be positive."""
-    param = DataStepParameter(
-        source_caslib="public",
-        source_table="raw_data",
-        target_caslib="public",
-        target_table="processed_data",
-        code="data output; set input; run;",
-        max_threads=0,  # Invalid: must be >= 1
-    )
-
-    with pytest.raises(ValueError, match="max_threads must be >= 1"):
-        param.validate()
-
-
-def test_datastep_parameter_validates_max_threads_negative() -> None:
-    """Test validation of max_threads cannot be negative."""
-    param = DataStepParameter(
-        source_caslib="public",
-        source_table="raw_data",
-        target_caslib="public",
-        target_table="processed_data",
-        code="data output; set input; run;",
-        max_threads=-1,  # Invalid: must be >= 1
-    )
-
-    with pytest.raises(ValueError, match="max_threads must be >= 1"):
+    with pytest.raises(ValueError, match="score_code cannot be empty"):
         param.validate()
 
 
@@ -90,8 +45,7 @@ def test_datastep_parameter_successful_validation() -> None:
         source_table="raw_data",
         target_caslib="public",
         target_table="processed_data",
-        code="data output; set input; new_var = var1 * 2; run;",
-        max_threads=4,
+        score_code="new_var = var1 * 2;",
     )
 
     # Should not raise
@@ -105,7 +59,7 @@ def test_datastep_parameter_validates_base_fields() -> None:
         source_table="raw_data",
         target_caslib="public",
         target_table="processed_data",
-        code="data output; set input; run;",
+        score_code="new_var = var1 * 2;",
     )
 
     with pytest.raises(ValueError, match="source_caslib cannot be empty"):
@@ -119,11 +73,11 @@ def test_datastep_parameter_immutability() -> None:
         source_table="raw_data",
         target_caslib="public",
         target_table="processed_data",
-        code="data output; set input; run;",
+        score_code="new_var = var1 * 2;",
     )
 
     with pytest.raises(AttributeError):
-        param.code = "modified"  # type: ignore[misc]
+        param.score_code = "modified"  # type: ignore[misc]
 
 
 def test_datastep_parameter_equality() -> None:
@@ -133,24 +87,21 @@ def test_datastep_parameter_equality() -> None:
         source_table="raw_data",
         target_caslib="public",
         target_table="processed_data",
-        code="data output; set input; run;",
-        max_threads=4,
+        score_code="new_var = var1 * 2;",
     )
     param2 = DataStepParameter(
         source_caslib="public",
         source_table="raw_data",
         target_caslib="public",
         target_table="processed_data",
-        code="data output; set input; run;",
-        max_threads=4,
+        score_code="new_var = var1 * 2;",
     )
     param3 = DataStepParameter(
         source_caslib="public",
         source_table="raw_data",
         target_caslib="public",
         target_table="processed_data",
-        code="data output; set input; run;",
-        max_threads=8,  # Different
+        score_code="new_var = var1 * 3;",  # Different
     )
 
     assert param1 == param2
@@ -159,24 +110,18 @@ def test_datastep_parameter_equality() -> None:
 
 def test_datastep_parameter_complex_code() -> None:
     """Test DataStepParameter with complex multi-line code."""
-    complex_code = """
-    data output;
-        set input;
-        if var1 > 10 then category = 'high';
-        else if var1 > 5 then category = 'medium';
-        else category = 'low';
-        new_var = var1 * var2;
-    run;
-    """
+    complex_code = """if var1 > 10 then category = 'high';
+    else if var1 > 5 then category = 'medium';
+    else category = 'low';
+    new_var = var1 * var2;"""
 
     param = DataStepParameter(
         source_caslib="public",
         source_table="raw_data",
         target_caslib="public",
         target_table="processed_data",
-        code=complex_code,
-        max_threads=2,
+        score_code=complex_code,
     )
 
-    assert param.code == complex_code
+    assert param.score_code == complex_code
     param.validate()  # Should not raise

@@ -18,15 +18,14 @@ class DataStepParameter(BaseModelParameter):
     """Parameters for DATA step execution.
 
     Extends BaseModelParameter with DATA step specific configuration
-    for custom code execution and processing options.
+    for custom code execution.
 
     Attributes:
         source_caslib: Source data CAS library
         source_table: Source data CAS table
         target_caslib: Target output CAS library
         target_table: Target output CAS table
-        code: SAS DATA step code to execute
-        max_threads: Maximum number of threads for parallel processing
+        score_code: SAS DATA step code to execute (from dmcas_scorecode.sas)
 
     Examples:
         >>> param = DataStepParameter(
@@ -34,14 +33,12 @@ class DataStepParameter(BaseModelParameter):
         ...     source_table="raw_data",
         ...     target_caslib="public",
         ...     target_table="processed_data",
-        ...     code="data output; set input; new_var = var1 * 2; run;",
-        ...     max_threads=4,
+        ...     score_code="new_var = var1 * 2;",
         ... )
         >>> param.validate()
     """
 
-    code: str
-    max_threads: int = 1
+    score_code: str
 
     @override
     def validate(self) -> None:
@@ -55,10 +52,6 @@ class DataStepParameter(BaseModelParameter):
         """
         super().validate()
 
-        if not self.code:
-            msg = "code cannot be empty"
-            raise ValueError(msg)
-
-        if self.max_threads < 1:
-            msg = f"max_threads must be >= 1, got {self.max_threads}"
+        if not self.score_code:
+            msg = "score_code cannot be empty"
             raise ValueError(msg)
