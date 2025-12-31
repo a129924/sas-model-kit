@@ -90,7 +90,7 @@ class CASTableResult(StreamableResult):
         # When chunksize is specified, iterrows returns a DataFrame, not a Series
         for _, batch_df in self._table.iterrows(chunksize=batch_size):
             # batch_df is a DataFrame containing up to batch_size rows
-            yield batch_df.to_dict('records')
+            yield batch_df.to_dict("records")
 
     @override
     def to_records(self) -> list[dict[str, Any]]:
@@ -108,4 +108,4 @@ class CASTableResult(StreamableResult):
             >>> records = result.to_records()
             >>> df = pd.DataFrame(records)
         """
-        return self._table.to_dict('records')
+        return self._table.to_dict("records")

@@ -1,47 +1,37 @@
 """Explain model parameter for model explainability analysis.
 
 This module provides parameters for generating model explanations,
-including visualization options and analysis depth configuration.
+including Shapley value computation configuration.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
+from dataclasses import dataclass, field
 
 from typing_extensions import override
 
 from .base import BaseModelParameter
 
 
-class ExplainDepth(Enum):
-    """Depth level for explanation analysis.
-
-    Attributes:
-        BASIC: Basic explanations only
-        DETAILED: Detailed analysis with feature importance
-        FULL: Full analysis including interactions
-    """
-
-    BASIC = "basic"
-    DETAILED = "detailed"
-    FULL = "full"
-
-
 @dataclass(frozen=True)
 class ExplainParameter(BaseModelParameter):
-    """Parameters for model explainability analysis.
+    """Parameters for model explainability analysis via Shapley values.
 
     Extends BaseModelParameter with explanation-specific configuration
-    for visualization output and analysis depth.
+    for Shapley value computation on SAS Viya models.
 
     Attributes:
         source_caslib: Source data CAS library
         source_table: Source data CAS table
         target_caslib: Target output CAS library
         target_table: Target output CAS table
-        depth: Analysis depth level
-        generate_plots: Whether to generate visualization plots
+        train_table: Training data CAS table name for Shapley computation
+        train_caslib: Training data CAS library
+        predicted_target: Target variable name for explanation
+        features: List of feature column names for Shapley calculation
+        id_cols: Set of ID column names to identify unique records
+        depth: Shapley explanation depth (controls calculation complexity, typically 1-10)
+        sas_score_code: Optional SAS evaluation code for data preprocessing
 
     Examples:
         >>> param = ExplainParameter(
@@ -49,14 +39,23 @@ class ExplainParameter(BaseModelParameter):
         ...     source_table="test_data",
         ...     target_caslib="public",
         ...     target_table="explanations",
-        ...     depth=ExplainDepth.DETAILED,
-        ...     generate_plots=True,
+        ...     train_table="training_data",
+        ...     train_caslib="public",
+        ...     predicted_target="churn_pred",
+        ...     features=["age", "income", "tenure"],
+        ...     id_cols={"customer_id"},
+        ...     depth=2,
         ... )
         >>> param.validate()
     """
 
-    depth: ExplainDepth = ExplainDepth.BASIC
-    generate_plots: bool = False
+    train_table: str
+    train_caslib: str
+    predicted_target: str
+    features: list[str]
+    id_cols: set[str]
+    depth: int
+    sas_score_code: str | None = None
 
     @override
     def validate(self) -> None:
@@ -70,6 +69,34 @@ class ExplainParameter(BaseModelParameter):
         """
         super().validate()
 
-        if not isinstance(self.depth, ExplainDepth):
-            msg = f"depth must be ExplainDepth enum, got {type(self.depth)}"
+        if not self.train_table:
+            msg = "train_table cannot be empty"
+            raise ValueError(msg)
+
+        if not self.train_caslib:
+            msg = "train_caslib cannot be empty"
+            raise ValueError(msg)
+
+        if not self.predicted_target:
+            msg = "predicted_target cannot be empty"
+            raise ValueError(msg)
+
+        if not self.features:
+            msg = "features cannot be empty"
+            raise ValueError(msg)
+
+        if not isinstance(self.features, list):
+            msg = f"features must be a list, got {type(self.features)}"
+            raise ValueError(msg)
+
+        if not self.id_cols:
+            msg = "id_cols cannot be empty"
+            raise ValueError(msg)
+
+        if not isinstance(self.id_cols, set):
+            msg = f"id_cols must be a set, got {type(self.id_cols)}"
+            raise ValueError(msg)
+
+        if not isinstance(self.depth, int) or self.depth < 1:
+            msg = f"depth must be a positive int, got {self.depth}"
             raise ValueError(msg)
