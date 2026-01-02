@@ -6,6 +6,7 @@ following the Single Responsibility Principle (SRP).
 """
 
 from sas_model_kit.result.cas_table import CASTableResult
+from sas_model_kit.result.execution_metadata import ExecutionMetadata
 from sas_model_kit.result.model_result import ModelResult
 from sas_model_kit.result.status import ResultStatus
 from sas_model_kit.result.streamable import StreamableResult
@@ -13,6 +14,7 @@ from sas_model_kit.result.swat_result import SwatModelResult
 
 __all__ = [
     "CASTableResult",
+    "ExecutionMetadata",
     "ModelResult",
     "ResultStatus",
     "StreamableResult",

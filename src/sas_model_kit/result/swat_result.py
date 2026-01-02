@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from typing_extensions import override
 
 from .cas_table import CASTableResult
+from .execution_metadata import ExecutionMetadata
 from .model_result import ModelResult
 
 if TYPE_CHECKING:
@@ -24,7 +25,8 @@ class SwatModelResult(ModelResult[CASTableResult]):
     to CASTable operations and conversion utilities.
 
     Examples:
-        >>> result = SwatModelResult.from_table(table)
+        >>> metadata = ExecutionMetadata(execution_time_ms=150.0, rows_affected=1000)
+        >>> result = SwatModelResult.from_table(table, metadata)
         >>> if result.is_success:
         ...     cas_table = result.get_table()
         ...     records = result.to_records()
@@ -34,22 +36,34 @@ class SwatModelResult(ModelResult[CASTableResult]):
     def from_table(
         cls,
         table: CASTable,
-        metadata: dict | None = None,
+        metadata: ExecutionMetadata | None = None,
     ) -> SwatModelResult:
         """Create a successful result from a CASTable.
 
         Args:
             table: SWAT CASTable instance
-            metadata: Optional metadata dictionary. Defaults to None.
+            metadata: ExecutionMetadata with timing and row info. 
+                     If None, defaults to zero timing with rows from table.
 
         Returns:
             SwatModelResult with SUCCESS status
 
         Examples:
             >>> table = conn.CASTable("results")
-            >>> result = SwatModelResult.from_table(table)
+            >>> metadata = ExecutionMetadata(
+            ...     execution_time_ms=100.0, 
+            ...     rows_affected=1000
+            ... )
+            >>> result = SwatModelResult.from_table(table, metadata)
         """
         from .status import ResultStatus
+
+        # Provide default metadata if not supplied
+        if metadata is None:
+            metadata = ExecutionMetadata(
+                execution_time_ms=0.0,
+                rows_affected=0,
+            )
 
         return cls(
             status=ResultStatus.SUCCESS,
@@ -61,31 +75,34 @@ class SwatModelResult(ModelResult[CASTableResult]):
     def from_error(
         cls,
         error: str | Exception,
-        metadata: dict | None = None,
+        metadata: ExecutionMetadata | None = None,
     ) -> SwatModelResult:
         """Create an error result.
 
         Args:
             error: Error message or exception
-            metadata: Optional metadata dictionary. Defaults to None.
+            metadata: ExecutionMetadata about the failed execution.
+                     If None, defaults to zero timing with zero rows.
 
         Returns:
             SwatModelResult with ERROR status
 
         Examples:
+            >>> metadata = ExecutionMetadata(execution_time_ms=50.0, rows_affected=0)
             >>> result = SwatModelResult.from_error(
             ...     "Table not found",
-            ...     metadata={"table": "missing_table"}
+            ...     metadata=metadata
             ... )
         """
         from .status import ResultStatus
 
-        error_msg = str(error) if isinstance(error, Exception) else error
-        metadata = metadata or {}
-        metadata["error"] = error_msg
+        # Provide default metadata if not supplied
+        if metadata is None:
+            metadata = ExecutionMetadata(
+                execution_time_ms=0.0,
+                rows_affected=0,
+            )
 
-        # Create a dummy CASTableResult for type consistency
-        # In error cases, data should not be accessed
         return cls(
             status=ResultStatus.ERROR,
             data=None,  # type: ignore[arg-type]
