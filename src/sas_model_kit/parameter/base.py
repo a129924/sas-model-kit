@@ -1,7 +1,21 @@
 """Base parameter class for model execution.
 
 This module defines the abstract base class for all model parameters,
-establishing the common interface and required fields.
+establishing the validation interface without concrete field requirements.
+
+Design Decision:
+    BaseModelParameter is a pure validation framework with NO concrete fields.
+    Each Model parameter class (AstoreParameter, DataStepParameter, ExplainParameter)
+    defines its own fields based on specific needs, following SRP (Single Responsibility
+    Principle). This avoids forcing unrelated fields on parameter classes that don't
+    use them.
+
+    Example:
+        - AstoreParameter needs: input_*/model_*/score_code (3 layers)
+        - DataStepParameter needs: score_code only (1 layer)
+        - ExplainParameter needs: train_*/score_*/model_* (different combination)
+
+    A shared base with source_*/target_* would violate SRP and add unnecessary coupling.
 """
 
 from __future__ import annotations
@@ -14,51 +28,38 @@ from dataclasses import dataclass
 class BaseModelParameter(ABC):
     """Abstract base class for model execution parameters.
 
-    Provides common fields for source and target specifications
-    that all model parameters must include. Uses frozen dataclass
-    to ensure immutability.
+    Serves as a validation framework for all model parameters.
+    Concrete parameter classes must implement validate() to check
+    their specific field requirements.
 
-    Attributes:
-        source_caslib: Source CAS library name
-        source_table: Source CAS table name
-        target_caslib: Target CAS library name for output
-        target_table: Target CAS table name for output
+    Uses frozen dataclass to ensure immutability of parameters
+    after construction.
 
     Examples:
         >>> @dataclass(frozen=True)
         ... class CustomParameter(BaseModelParameter):
+        ...     input_table: str
         ...     custom_field: str
         ...
         ...     def validate(self) -> None:
+        ...         if not self.input_table:
+        ...             raise ValueError("input_table required")
         ...         if not self.custom_field:
         ...             raise ValueError("custom_field required")
     """
-
-    source_caslib: str
-    source_table: str
-    target_caslib: str
-    target_table: str
 
     @abstractmethod
     def validate(self) -> None:
         """Validate parameter values.
 
+        Each concrete parameter class must implement this method to validate
+        its own fields. There is no shared validation logic in the base class
+        because each parameter class has different field requirements.
+
         Raises:
             ValueError: If any parameter value is invalid
 
-        Note:
-            Concrete implementations must call super().validate()
-            to ensure base validation is performed.
+        Examples:
+            >>> param = AstoreParameter(...)
+            >>> param.validate()  # Raises ValueError if fields invalid
         """
-        if not self.source_caslib:
-            msg = "source_caslib cannot be empty"
-            raise ValueError(msg)
-        if not self.source_table:
-            msg = "source_table cannot be empty"
-            raise ValueError(msg)
-        if not self.target_caslib:
-            msg = "target_caslib cannot be empty"
-            raise ValueError(msg)
-        if not self.target_table:
-            msg = "target_table cannot be empty"
-            raise ValueError(msg)
