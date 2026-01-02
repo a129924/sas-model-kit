@@ -9,6 +9,7 @@ import pytest
 
 from sas_model_kit.result import (
     CASTableResult,
+    ExecutionMetadata,
     ModelResult,
     ResultStatus,
     SwatModelResult,
@@ -40,33 +41,43 @@ def test_swat_model_result_is_model_result() -> None:
     assert issubclass(SwatModelResult, ModelResult)
 
 
-def test_swat_model_result_from_table(mock_cas_table: CASTable) -> None:
-    """Test creating SwatModelResult from CASTable."""
+def test_swat_model_result_from_table_default_metadata(
+    mock_cas_table: CASTable,
+) -> None:
+    """Test creating SwatModelResult from CASTable with default metadata."""
     result = SwatModelResult.from_table(mock_cas_table)
 
     assert result.is_success
     assert result.status == ResultStatus.SUCCESS
     assert isinstance(result.data, CASTableResult)
+    # Default metadata should have zero time and zero rows
+    assert result.metadata.execution_time_ms == 0.0
+    assert result.metadata.rows_affected == 0
 
 
 def test_swat_model_result_from_table_with_metadata(
     mock_cas_table: CASTable,
 ) -> None:
-    """Test creating SwatModelResult with metadata."""
-    metadata = {"model": "decision_tree", "accuracy": 0.95}
+    """Test creating SwatModelResult with custom metadata."""
+    metadata = ExecutionMetadata(
+        execution_time_ms=150.5,
+        rows_affected=1000,
+    )
     result = SwatModelResult.from_table(mock_cas_table, metadata=metadata)
 
-    assert result.metadata["model"] == "decision_tree"
-    assert result.metadata["accuracy"] == 0.95
+    assert result.metadata.execution_time_ms == 150.5
+    assert result.metadata.rows_affected == 1000
 
 
-def test_swat_model_result_from_error_with_string() -> None:
-    """Test creating error result from string."""
+def test_swat_model_result_from_error_default_metadata() -> None:
+    """Test creating error result with default metadata."""
     result = SwatModelResult.from_error("Table not found")
 
     assert result.is_error
     assert result.status == ResultStatus.ERROR
-    assert result.metadata["error"] == "Table not found"
+    # Default metadata should have zero time and zero rows
+    assert result.metadata.execution_time_ms == 0.0
+    assert result.metadata.rows_affected == 0
 
 
 def test_swat_model_result_from_error_with_exception() -> None:
@@ -76,17 +87,18 @@ def test_swat_model_result_from_error_with_exception() -> None:
 
     assert result.is_error
     assert result.status == ResultStatus.ERROR
-    assert "Invalid parameter" in result.metadata["error"]
 
 
 def test_swat_model_result_from_error_with_metadata() -> None:
     """Test creating error result with custom metadata."""
-    metadata = {"table": "missing_table", "operation": "score"}
+    metadata = ExecutionMetadata(
+        execution_time_ms=50.0,
+        rows_affected=0,
+    )
     result = SwatModelResult.from_error("Not found", metadata=metadata)
 
-    assert result.metadata["error"] == "Not found"
-    assert result.metadata["table"] == "missing_table"
-    assert result.metadata["operation"] == "score"
+    assert result.status == ResultStatus.ERROR
+    assert result.metadata.execution_time_ms == 50.0
 
 
 def test_swat_model_result_get_table(mock_cas_table: CASTable) -> None:
@@ -169,3 +181,20 @@ def test_swat_model_result_iteration_via_data(
 
     assert len(records) == 2
     assert records[0] == {"id": 1, "score": 95}
+
+
+def test_swat_model_result_metadata_with_intended_output(
+    mock_cas_table: CASTable,
+) -> None:
+    """Test SwatModelResult with intended output in metadata."""
+    metadata = ExecutionMetadata(
+        execution_time_ms=100.0,
+        rows_affected=500,
+        intended_output_caslib="public",
+        intended_output_table="results",
+    )
+    result = SwatModelResult.from_table(mock_cas_table, metadata=metadata)
+
+    assert result.metadata.intended_output_caslib == "public"
+    assert result.metadata.intended_output_table == "results"
+

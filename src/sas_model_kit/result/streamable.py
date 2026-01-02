@@ -11,7 +11,7 @@ StreamableResult responsibilities:
 - NOT responsible for: Data format conversion (e.g., to DataFrame)
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from typing import Any, Protocol, runtime_checkable
 
 
@@ -64,7 +64,7 @@ class StreamableResult(Protocol):
         """
         ...
 
-    def stream(self, batch_size: int = 1000) -> Iterator[list[dict[str, Any]]]:
+    def stream(self, batch_size: int = 1000) -> Iterator[Sequence[dict[str, Any]]]:
         """
         Stream result data in batches.
 

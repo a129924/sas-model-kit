@@ -9,7 +9,7 @@ import pytest
 from sas_model_kit.model import SyncModel
 from sas_model_kit.operation import OperationProtocol
 from sas_model_kit.parameter import BaseModelParameter
-from sas_model_kit.result import ModelResult, ResultStatus
+from sas_model_kit.result import ExecutionMetadata, ModelResult, ResultStatus
 
 
 class ConcreteModel(SyncModel):
@@ -24,6 +24,10 @@ class ConcreteModel(SyncModel):
         return ModelResult(
             status=ResultStatus.SUCCESS,
             data={"result": "success"},
+            metadata=ExecutionMetadata(
+                execution_time_ms=100.0,
+                rows_affected=100,
+            ),
         )
 
 
@@ -39,7 +43,10 @@ class FailingModel(SyncModel):
         return ModelResult(
             status=ResultStatus.ERROR,
             data=None,
-            metadata={"error": "Model execution failed"},
+            metadata=ExecutionMetadata(
+                execution_time_ms=50.0,
+                rows_affected=0,
+            ),
         )
 
 
@@ -78,7 +85,7 @@ def test_sync_model_execute_with_error() -> None:
 
     assert isinstance(result, ModelResult)
     assert result.is_error
-    assert result.metadata["error"] == "Model execution failed"
+    assert result.metadata.execution_time_ms == 50.0
 
 
 def test_sync_model_execute_signature() -> None:
@@ -120,3 +127,4 @@ def test_sync_model_accepts_operation_protocol() -> None:
     # Should not raise
     result = model.execute(operation, parameter)
     assert result is not None
+

@@ -1,13 +1,19 @@
 """Generic model execution result container.
 
 This module provides a generic container for model execution results,
-supporting both concrete data types and streamable results.
+supporting both concrete data types and streamable results with proper metadata tracking.
+
+Design:
+    - data: Optional (some models don't produce CASTable output)
+    - metadata: ExecutionMetadata (no duplicate output_* fields)
+    - Supports both synchronous results and StreamableResult implementations
 """
 
 from __future__ import annotations
 
 from typing import Generic, TypeVar
 
+from .execution_metadata import ExecutionMetadata
 from .status import ResultStatus
 from .streamable import StreamableResult
 
@@ -17,44 +23,67 @@ T = TypeVar("T")
 class ModelResult(Generic[T]):
     """Generic container for model execution results.
 
-    Wraps execution results with status information and optional metadata.
+    Wraps execution results with status information and execution metadata.
     Supports both concrete data types and StreamableResult implementations.
+    Data is optional to support models that don't produce output tables.
 
     Type Parameters:
-        T: The type of data contained in the result
+        T: The type of data contained in the result (e.g., CASTableResult)
 
     Attributes:
         status: Execution status (SUCCESS or ERROR)
-        data: The result data (can be concrete type or StreamableResult)
-        metadata: Optional metadata about the execution
+        data: Optional result data. None for models that don't produce output.
+        metadata: Execution metadata (time, rows, etc.). No duplicate output info.
 
     Examples:
+        >>> # With CASTable output
         >>> result = ModelResult(
         ...     status=ResultStatus.SUCCESS,
         ...     data=table_result,
-        ...     metadata={"rows": 1000}
+        ...     metadata=ExecutionMetadata(
+        ...         execution_time_ms=150.0,
+        ...         rows_affected=1000,
+        ...     )
         ... )
-        >>> if result.status == ResultStatus.SUCCESS:
-        ...     for record in result.data:
-        ...         process(record)
+        >>> if result.is_success and result.data:
+        ...     print(f"Output at {result.data.caslib}.{result.data.name}")
+
+        >>> # Without data output (e.g., explanation metadata only)
+        >>> result_no_data = ModelResult(
+        ...     status=ResultStatus.SUCCESS,
+        ...     data=None,
+        ...     metadata=ExecutionMetadata(
+        ...         execution_time_ms=250.0,
+        ...         rows_affected=0,
+        ...         intended_output_caslib="models",
+        ...         intended_output_table="explain_results",
+        ...     )
+        ... )
     """
 
     def __init__(
         self,
         status: ResultStatus,
-        data: StreamableResult,
-        metadata: dict | None = None,
+        data: StreamableResult | None,
+        metadata: ExecutionMetadata,
     ) -> None:
-        """Initialize model result with status and data.
+        """Initialize model result with status, optional data, and metadata.
 
         Args:
             status: The execution status
-            data: The result data (concrete type or StreamableResult)
-            metadata: Optional metadata dictionary. Defaults to None.
+            data: Optional result data (None for models that don't produce output)
+            metadata: Execution metadata with timing and row information
+
+        Raises:
+            TypeError: If metadata is not ExecutionMetadata
         """
+        if not isinstance(metadata, ExecutionMetadata):
+            msg = f"metadata must be ExecutionMetadata, got {type(metadata)}"
+            raise TypeError(msg)
+
         self._status = status
         self._data = data
-        self._metadata = metadata or {}
+        self._metadata = metadata
 
     @property
     def status(self) -> ResultStatus:
@@ -66,20 +95,20 @@ class ModelResult(Generic[T]):
         return self._status
 
     @property
-    def data(self) -> StreamableResult:
-        """Get the result data.
+    def data(self) -> StreamableResult | None:
+        """Get the optional result data.
 
         Returns:
-            The wrapped data (concrete type or StreamableResult)
+            The wrapped data (can be None if no output was produced)
         """
         return self._data
 
     @property
-    def metadata(self) -> dict:
+    def metadata(self) -> ExecutionMetadata:
         """Get the execution metadata.
 
         Returns:
-            Dictionary containing execution metadata
+            ExecutionMetadata with timing and row information
         """
         return self._metadata
 
@@ -92,7 +121,10 @@ class ModelResult(Generic[T]):
 
         Examples:
             >>> if result.is_success:
-            ...     process(result.data)
+            ...     if result.data:
+            ...         process(result.data)
+            ...     else:
+            ...         use_metadata_info(result.metadata)
         """
         return self._status == ResultStatus.SUCCESS
 
@@ -102,9 +134,5 @@ class ModelResult(Generic[T]):
 
         Returns:
             True if status is ERROR, False otherwise
-
-        Examples:
-            >>> if result.is_error:
-            ...     handle_error(result.metadata.get("error"))
         """
         return self._status == ResultStatus.ERROR
