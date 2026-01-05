@@ -17,7 +17,6 @@ DEPRECATED:
         result = Err[ModelError](ModelError(message=..., metadata=...))
 """
 
-import warnings
 from enum import Enum
 
 from typing_extensions import deprecated
@@ -47,12 +46,3 @@ class ResultStatus(Enum):
 
     SUCCESS = "success"
     ERROR = "error"
-
-    def __init__(self, value: str) -> None:
-        """Initialize with deprecation warning."""
-        self._value_ = value
-        warnings.warn(
-            "ResultStatus is deprecated. Use Result[ModelSuccess[T], ModelError] instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )

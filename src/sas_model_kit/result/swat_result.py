@@ -2,13 +2,17 @@
 
 This module provides a specialized result container for SWAT/CAS operations,
 offering convenience methods for common CAS table operations.
+
+DEPRECATED:
+    This class is deprecated. Use Result[ModelSuccess[CASTableResult], ModelError] instead.
+    See model_result_new.py for the new pattern.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from typing_extensions import override
+from typing_extensions import deprecated, override
 
 from .cas_table import CASTableResult
 from .execution_metadata import ExecutionMetadata
@@ -18,8 +22,14 @@ if TYPE_CHECKING:
     from swat import CASTable
 
 
+@deprecated(
+    "SwatModelResult is deprecated. Use Result[ModelSuccess[CASTableResult], ModelError] instead. "
+    "See model_result_new.py for the new pattern."
+)
 class SwatModelResult(ModelResult[CASTableResult]):
     """SWAT-specific model result with CASTable convenience methods.
+
+    DEPRECATED: Use Result[ModelSuccess[CASTableResult], ModelError] instead.
 
     Specializes ModelResult for SWAT operations, providing direct access
     to CASTable operations and conversion utilities.

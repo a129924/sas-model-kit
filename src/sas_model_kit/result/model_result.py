@@ -3,6 +3,10 @@
 This module provides a generic container for model execution results,
 supporting both concrete data types and streamable results with proper metadata tracking.
 
+DEPRECATED:
+    This class is deprecated. Use Result[ModelSuccess[T], ModelError] instead.
+    See model_result_new.py for the new pattern.
+
 Design:
     - data: Optional (some models don't produce CASTable output)
     - metadata: ExecutionMetadata (no duplicate output_* fields)
@@ -13,6 +17,8 @@ from __future__ import annotations
 
 from typing import Generic, TypeVar
 
+from typing_extensions import deprecated
+
 from .execution_metadata import ExecutionMetadata
 from .status import ResultStatus
 from .streamable import StreamableResult
@@ -20,8 +26,14 @@ from .streamable import StreamableResult
 T = TypeVar("T")
 
 
+@deprecated(
+    "ModelResult is deprecated. Use Result[ModelSuccess[T], ModelError] instead. "
+    "See model_result_new.py for the new pattern."
+)
 class ModelResult(Generic[T]):
     """Generic container for model execution results.
+
+    DEPRECATED: Use Result[ModelSuccess[T], ModelError] instead.
 
     Wraps execution results with status information and execution metadata.
     Supports both concrete data types and StreamableResult implementations.
