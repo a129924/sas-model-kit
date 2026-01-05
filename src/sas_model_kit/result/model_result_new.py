@@ -25,7 +25,7 @@ Examples:
     ...     cause = result.unwrap_err().cause
 """
 
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from .base import Result
 from .model_types import ModelError, ModelSuccess
