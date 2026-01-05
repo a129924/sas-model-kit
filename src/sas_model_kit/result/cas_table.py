@@ -64,7 +64,7 @@ class CASTableResult(StreamableResult):
             >>> for record in result:
             ...     print(record["id"], record["name"])
         """
-        for _, row in self._table.iterrows():
+        for _, row in self._table.iterrows():  # row type is `pandas.Series`
             yield row.to_dict()
 
     @override
