@@ -127,4 +127,3 @@ def test_sync_model_accepts_operation_protocol() -> None:
     # Should not raise
     result = model.execute(operation, parameter)
     assert result is not None
-

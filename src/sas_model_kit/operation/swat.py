@@ -157,10 +157,11 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame]):
             ...     print("Table exists")
         """
         try:
-            result = self._session.table.tableExists(
+            result = self._session.table.tableExists(  # CASResults
                 caslib=caslib,
                 name=table,
             )
+            # CASResults['exists'] => 0 || 2
 
             # SWAT returns CASResults with 'exists' key
             return bool(result.get("exists", 0))

@@ -197,4 +197,3 @@ def test_swat_model_result_metadata_with_intended_output(
 
     assert result.metadata.intended_output_caslib == "public"
     assert result.metadata.intended_output_table == "results"
-
