@@ -42,7 +42,7 @@ class SwatModelResult(ModelResult[CASTableResult]):
 
         Args:
             table: SWAT CASTable instance
-            metadata: ExecutionMetadata with timing and row info. 
+            metadata: ExecutionMetadata with timing and row info.
                      If None, defaults to zero timing with rows from table.
 
         Returns:
@@ -51,7 +51,7 @@ class SwatModelResult(ModelResult[CASTableResult]):
         Examples:
             >>> table = conn.CASTable("results")
             >>> metadata = ExecutionMetadata(
-            ...     execution_time_ms=100.0, 
+            ...     execution_time_ms=100.0,
             ...     rows_affected=1000
             ... )
             >>> result = SwatModelResult.from_table(table, metadata)
