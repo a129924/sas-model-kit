@@ -18,6 +18,7 @@ from .exceptions import (
 )
 from .protocol import CASTableTransformer
 from .sort import SortTransformer
+from .unique_key import AddUniqueKeyTransformer
 
 __all__ = [
     "CASTableTransformer",
@@ -26,4 +27,5 @@ __all__ = [
     "TableNotFoundError",
     "ColumnConflictError",
     "SortTransformer",
+    "AddUniqueKeyTransformer",
 ]
