@@ -17,6 +17,7 @@ from .exceptions import (
     TransformationError,
 )
 from .protocol import CASTableTransformer
+from .sort import SortTransformer
 
 __all__ = [
     "CASTableTransformer",
@@ -24,4 +25,5 @@ __all__ = [
     "InvalidColumnError",
     "TableNotFoundError",
     "ColumnConflictError",
+    "SortTransformer",
 ]
