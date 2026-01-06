@@ -30,8 +30,17 @@ class SWATConnection(SessionProtocol[swat.CAS]):
     """
     SWAT implementation of SessionProtocol.
 
-    This class manages the lifecycle of a swat.CAS session, following SRP
-    by focusing only on connection management.
+    Manages the lifecycle of a swat.CAS session with focus on connection
+    integrity and state safety.
+
+    Thread Safety:
+        NOT thread-safe. Use one connection per thread or one per operation.
+        For concurrent access, use SWATConnectionPool (future implementation).
+
+    State Management:
+        swat.CAS operations create persistent server-side state (tables,
+        variables, etc.). To prevent state pollution between operations,
+        the connection is closed after each context manager exit.
 
     Attributes:
         connection_type: Class variable identifying this as SWAT connection
@@ -39,15 +48,25 @@ class SWATConnection(SessionProtocol[swat.CAS]):
         port: CAS server port
         username: Username for authentication (optional)
         password: Password for authentication (optional)
-        session: The underlying swat.CAS session (created after connect())
 
-    Example:
-        >>> # Manual connection management
-        >>> connection = SWATConnection('hostname', 5570)
-        >>> connection.connect()
-        >>> if connection.is_healthy():
-        ...     session = connection.get_session()
-        ...     # Create operation via factory
+    Context Manager Usage (Recommended):
+        ```python
+        with SWATConnection('hostname', 5570) as conn:
+            session = conn.get_session()
+            # Use session
+            # Connection closes on exit, state is cleaned
+        ```
+
+    Manual Management:
+        ```python
+        connection = SWATConnection('hostname', 5570)
+        try:
+            connection.connect()
+            session = connection.get_session()
+            # Use session
+        finally:
+            connection.close()
+        ```
         ...     operation = OperationFactory.create(connection)
         >>> connection.close()
 
@@ -235,19 +254,20 @@ class SWATConnection(SessionProtocol[swat.CAS]):
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         """
-        Context manager exit.
+        Context manager exit - close connection to prevent state pollution.
 
-        Note: Does NOT close the connection by default. Connection remains
-        open for reuse. Next time __enter__ is called, it will check health
-        and reconnect if needed.
+        swat.CAS operations create persistent server-side state (tables,
+        variables, etc.). Reusing the same connection without cleanup leads
+        to state pollution - a security and correctness issue.
 
-        Creating `swat.CAS` instance is resource-intensive,
-        To optimize performance, the connection is kept open for reuse.
-        The `is_healthy()` method will verify connection health on next use.
+        Although creating swat.CAS is resource-intensive, preventing state
+        pollution takes precedence. The connection is closed on exit.
+
+        Future optimization: SWATConnectionPool can safely reuse connections
+        if swat.CAS provides state cleanup APIs (e.g., clear_all()).
 
         Returns:
             False to propagate exceptions
         """
-        # Do not close connection - leave it open for next use
-        # Next __enter__ will check health and reconnect if needed
+        self.close()
         return False

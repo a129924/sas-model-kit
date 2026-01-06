@@ -332,11 +332,12 @@ class TestSWATConnectionContextManager:
     """Test context manager functionality."""
 
     @patch("sas_model_kit.connection.swat.connection.swat.CAS")
-    def test_context_manager_connects(self, mock_cas_class):
-        """Test context manager auto-connects."""
+    def test_context_manager_connects_and_closes(self, mock_cas_class):
+        """Test context manager auto-connects and closes to prevent state pollution."""
         # Setup mock
         mock_session = Mock()
         mock_session.serverstatus.return_value = {"status": "ok"}
+        mock_session.close = Mock()
         mock_cas_class.return_value = mock_session
 
         # Use context manager
@@ -346,12 +347,13 @@ class TestSWATConnectionContextManager:
             assert conn._session == mock_session
             assert conn.is_healthy()
 
-        # Connection should remain open after exit
-        assert connection._session == mock_session
+        # Connection should be closed after exit to prevent state pollution
+        assert connection._session is None
+        mock_session.close.assert_called_once()
 
     @patch("sas_model_kit.connection.swat.connection.swat.CAS")
     def test_context_manager_reconnects_if_unhealthy(self, mock_cas_class):
-        """Test context manager reconnects if needed."""
+        """Test context manager reconnects if unhealthy and closes after."""
         # Setup mocks
         old_session = Mock()
         old_session.serverstatus.return_value = {"status": "ok"}
@@ -359,6 +361,7 @@ class TestSWATConnectionContextManager:
 
         new_session = Mock()
         new_session.serverstatus.return_value = {"status": "ok"}
+        new_session.close = Mock()
 
         mock_cas_class.side_effect = [old_session, new_session]
 
@@ -369,34 +372,42 @@ class TestSWATConnectionContextManager:
         # Make connection unhealthy
         old_session.serverstatus.side_effect = Exception("Connection lost")
 
-        # Use context manager - should reconnect
+        # Use context manager - should reconnect and close
         with connection as conn:
             assert conn._session == new_session
 
-        # Old session should be closed
+        # New session should be closed after exit
+        assert connection._session is None
         old_session.close.assert_called_once()
+        new_session.close.assert_called_once()
 
     @patch("sas_model_kit.connection.swat.connection.swat.CAS")
-    def test_context_manager_reuses_healthy_connection(self, mock_cas_class):
-        """Test context manager reuses healthy connection."""
+    def test_context_manager_creates_new_on_each_use(self, mock_cas_class):
+        """Test context manager creates new connection on each entry."""
         # Setup mock
         mock_session = Mock()
         mock_session.serverstatus.return_value = {"status": "ok"}
+        mock_session.close = Mock()
         mock_cas_class.return_value = mock_session
 
         # Connect
         connection = SWATConnection("hostname", 5570)
-        connection.connect()
 
         # Use context manager multiple times
         with connection:
             pass
 
+        # Connection closed after first use
+        assert connection._session is None
+        assert mock_session.close.call_count == 1
+
+        # Use again - creates new connection
         with connection:
             pass
 
-        # Should only create session once
-        mock_cas_class.assert_called_once()
+        # Each use creates a new connection (same mock for simplicity)
+        # In reality, would be different instances
+        assert mock_session.close.call_count == 2
 
     @patch("sas_model_kit.connection.swat.connection.swat.CAS")
     def test_context_manager_propagates_exceptions(self, mock_cas_class):
