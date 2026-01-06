@@ -21,14 +21,34 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame]):
     Implements OperationProtocol using SWAT's CAS session API, following CSRP
     (Concrete Single Responsibility Principle).
 
+    Automatically loads required actionsets on first use for transparent operation.
+    Each actionset is loaded only once per adapter instance.
+
     Attributes:
         _session: Underlying SWAT CAS session
+        _loaded_actionsets: Set of actionsets already loaded in this instance
+
+    Thread Safety:
+        Not thread-safe. If using in ThreadPool, create separate adapter
+        instances for each thread.
 
     Example:
         >>> connection = SWATConnection(...)
         >>> operation = connection.get_operation()
+        >>> # Actionset 'astore' auto-loaded on first call
         >>> result = operation.call_action('astore.score', ...)
+        >>> # Subsequent calls reuse loaded actionset
+        >>> result2 = operation.call_action('astore.score', ...)
     """
+
+    def __init__(self, connection: swat.CAS) -> None:
+        """Initialize SWAT operation adapter with actionset tracking.
+
+        Args:
+            connection: SWAT CAS session
+        """
+        super().__init__(connection)
+        self._loaded_actionsets: set[str] = set()
 
     @override
     def _check_connection_type(self, connection: Any) -> None:
@@ -43,11 +63,14 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame]):
     @override
     def call_action(self, action_name: str, **kwargs: Any) -> Any:
         """
-        Execute a SAS action using SWAT.
+        Execute a SAS action using SWAT with automatic actionset loading.
 
         Uses SWAT's __getattr__ pattern to dynamically invoke actions:
         - 'astore.score' -> session.astore.score(**kwargs)
         - 'explainModel.explain' -> session.explainModel.explain(**kwargs)
+
+        Automatically loads the required actionset if not already loaded.
+        Each actionset is loaded only once per adapter instance.
 
         Args:
             action_name: Action to execute (format: 'actionset.action')
@@ -61,11 +84,14 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame]):
             RuntimeError: If action execution fails
 
         Example:
+            >>> # First call auto-loads 'astore' actionset
             >>> result = adapter.call_action(
             ...     'astore.score',
             ...     table={'name': 'input_data'},
             ...     rstore={'name': 'my_model'}
             ... )
+            >>> # Subsequent calls reuse loaded actionset
+            >>> result2 = adapter.call_action('astore.score', ...)
         """
         # Validate action_name format
         if "." not in action_name:
@@ -78,6 +104,9 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame]):
         parts = action_name.split(".", 1)
         actionset_name = parts[0]
         action_method = parts[1]
+
+        # Auto-load actionset if not already loaded
+        self._ensure_actionset_loaded(actionset_name)
 
         try:
             # Use SWAT's __getattr__ pattern to access actionset
@@ -94,6 +123,39 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame]):
 
         except Exception as e:
             raise RuntimeError(f"Failed to execute action '{action_name}': {e}") from e
+
+    def _ensure_actionset_loaded(self, actionset_name: str) -> None:
+        """Ensure actionset is loaded, loading it if necessary.
+
+        Loads actionset only once per adapter instance. Tracks loaded
+        actionsets in _loaded_actionsets set.
+
+        Args:
+            actionset_name: Name of actionset to ensure is loaded
+
+        Note:
+            This method is idempotent - safe to call multiple times.
+        """
+        # Skip if already loaded in this instance
+        if actionset_name in self._loaded_actionsets:
+            return
+
+        # Check if actionset is loaded on server
+        # Note: has_actionset() is a SWAT CAS session method
+        if not hasattr(
+            self._session, "has_actionset"
+        ) or not self._session.has_actionset(actionset_name):
+            # Load actionset on server
+            try:
+                self._session.loadactionset(actionset_name)
+            except Exception as e:
+                # TODO: Consider logging warning here
+                # Log but don't fail - server might already have it loaded
+                # or it might fail gracefully in the actual call_action
+                pass
+
+        # Mark as loaded in this instance
+        self._loaded_actionsets.add(actionset_name)
 
     @override
     def upload_data(self, data: DataFrame, caslib: str, table: str) -> None:
