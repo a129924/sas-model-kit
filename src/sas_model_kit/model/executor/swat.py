@@ -40,9 +40,7 @@ def _extract_timing_ms(result: CASResults) -> float:
     if not hasattr(result, "get"):
         return 0.0
 
-    timing: SASDataFrame | None = cast(
-        SASDataFrame | None, result.get("Timing", None)
-    )
+    timing: SASDataFrame | None = cast(SASDataFrame | None, result.get("Timing", None))
 
     if timing is None or timing.empty:
         return 0.0
