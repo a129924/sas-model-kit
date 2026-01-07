@@ -71,26 +71,43 @@ class CASTableResult(StreamableResult):
     def stream(self, batch_size: int = 1000) -> Iterator[list[dict[str, Any]]]:
         """Stream records in batches for memory-efficient processing.
 
-        Leverages SWAT's iterrows(chunksize=N) to fetch batches efficiently
-        from the server, avoiding loading entire table into memory.
+        Uses itertools.islice to efficiently batch rows without append overhead.
+        SWAT's internal _fetch(chunksize) handles server-side optimization,
+        while islice handles client-side batching for reduced loop iterations.
 
         Args:
-            batch_size: Number of records to fetch per batch.
-                Defaults to 1000.
+            batch_size: Number of records per batch (default: 1000).
+                        Must be > 0.
 
         Yields:
-            List of dictionary representations for each batch
+            List of dictionary records, each batch contains up to batch_size rows.
+            Last batch may contain fewer rows.
+
+        Raises:
+            ValueError: If batch_size <= 0
 
         Examples:
             >>> result = CASTableResult(table)
             >>> for batch in result.stream(batch_size=500):
+            ...     assert len(batch) <= 500
             ...     process_batch(batch)  # batch is list[dict]
         """
-        # Use SWAT's iterrows(chunksize=N) for efficient server-side batch fetching
-        # When chunksize is specified, iterrows returns a DataFrame, not a Series
-        for _, batch_df in self._table.iterrows(chunksize=batch_size):
-            # batch_df is a DataFrame containing up to batch_size rows
-            yield batch_df.to_dict("records")
+        from itertools import islice
+
+        if batch_size <= 0:
+            raise ValueError(f"batch_size must be > 0, got {batch_size}")
+
+        rows_iter = self._table.iterrows()
+
+        while True:
+            # Use islice to avoid append overhead
+            batch = list(islice(rows_iter, batch_size))
+
+            if not batch:
+                break
+
+            # Convert batch of (index, Series) tuples to list[dict]
+            yield [row.to_dict() for _, row in batch]
 
     @override
     def to_records(self) -> list[dict[str, Any]]:
