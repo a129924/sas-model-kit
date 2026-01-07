@@ -37,15 +37,20 @@ def _extract_timing_ms(result: CASResults) -> float:
     Returns:
         Total execution time in milliseconds, or 0.0 if not found.
     """
-    if hasattr(result, "get"):
-        timing: SASDataFrame | None = cast(
-            SASDataFrame | None, result.get("Timing", None)
-        )
-        if timing is not None and not timing.empty:
-            return (
-                timing[timing["Task"] == "Total"]["Seconds"].values[0] * 1000.0
-            ).item()
-    return 0.0
+    if not hasattr(result, "get"):
+        return 0.0
+
+    timing: SASDataFrame | None = cast(
+        SASDataFrame | None, result.get("Timing", None)
+    )
+
+    if timing is None or timing.empty:
+        return 0.0
+
+    try:
+        return float(timing[timing["Task"] == "Total"]["Seconds"].values[0]) * 1000.0
+    except (IndexError, KeyError, ValueError):
+        return 0.0
 
 
 def _extract_rows_from_output_tables(result: CASResults) -> int:
