@@ -32,9 +32,7 @@ class FakeOperation(OperationProtocol[Any]):
             # Mock SASDataFrame from SWAT
             mock_df = MagicMock()
             mock_df.empty = False
-            mock_df.to_dict.return_value = [
-                {"Variable": "age", "ShapleyValue": 0.42}
-            ]
+            mock_df.to_dict.return_value = [{"Variable": "age", "ShapleyValue": 0.42}]
             return {"ShapleyValues": mock_df}
         if action_name == "datastep.runCode":
             return {"status": False, "reason": "syntax error"}
