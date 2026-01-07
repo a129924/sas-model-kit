@@ -117,6 +117,7 @@ class TestExplainParameterToSwatDictMapper:
             model_table_type=ModelTableType.ASTORE,
             model_caslib="models",
             model_table="astore_model",
+            sas_score_code="code",
         )
         mapper = ExplainParameterToSwatDictMapper()
 
@@ -148,6 +149,8 @@ class TestExplainParameterToSwatDictMapper:
             depth=2,
             model_table_type=ModelTableType.DATASTEP,
             sas_score_code="y = a*x1 + b*x2;",
+            model_caslib="models",
+            model_table="ref",
         )
         mapper = ExplainParameterToSwatDictMapper()
 
@@ -157,7 +160,7 @@ class TestExplainParameterToSwatDictMapper:
         # Assert
         assert result["modelTableType"] == "DATASTEP"
         assert result["code"] == "y = a*x1 + b*x2;"
-        assert "modelTable" not in result
+        assert "modelTable" in result
 
     def test_map_with_multiple_id_cols(self) -> None:
         """Should handle multiple ID columns."""
@@ -172,6 +175,7 @@ class TestExplainParameterToSwatDictMapper:
             model_table_type=ModelTableType.ASTORE,
             model_caslib="models",
             model_table="model",
+            sas_score_code="code",
         )
         mapper = ExplainParameterToSwatDictMapper()
 
@@ -184,29 +188,6 @@ class TestExplainParameterToSwatDictMapper:
         assert "id1" in id_list
         assert "id2" in id_list
         assert "id3" in id_list
-    def test_map_with_score_data(self) -> None:
-        """Should include score data if provided."""
-        # Arrange
-        param = ExplainParameter(
-            train_caslib="public",
-            train_table="training",
-            predicted_target="target",
-            features=["f1"],
-            id_cols={"id"},
-            depth=1,
-            model_table_type=ModelTableType.ASTORE,
-            model_caslib="models",
-            model_table="model",
-            score_caslib="public",
-            score_table="test_data",
-        )
-        mapper = ExplainParameterToSwatDictMapper()
-
-        # Act
-        result = mapper.map(param)
-
-        # Assert
-        assert result["scoreTable"] == {"name": "test_data", "caslib": "public"}
 
 
 class TestDataStepParameterToSwatDictMapper:

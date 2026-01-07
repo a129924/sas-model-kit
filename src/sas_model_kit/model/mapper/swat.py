@@ -230,25 +230,18 @@ class ExplainParameterToSwatDictMapper(ParameterMapper[ExplainParameter]):
         if "output_caslib" in context and "output_table" in context:
             query_dict["name"] = context["output_table"]
             query_dict["caslib"] = context["output_caslib"]
-        
+
         if query_dict:
             action_dict["query"] = query_dict
 
         # Add model spec based on type
-        if model_type == "ASTORE":
-            action_dict["modelTable"] = {
-                "name": parameter.model_table,
-                "caslib": parameter.model_caslib,
-            }
-        elif model_type == "DATASTEP":
-            action_dict["code"] = parameter.sas_score_code
-
-        # Add optional score data if provided
-        if parameter.score_caslib and parameter.score_table:
-            action_dict["scoreTable"] = {
-                "name": parameter.score_table,
-                "caslib": parameter.score_caslib,
-            }
+        model_table_spec = {
+            "name": parameter.model_table,
+            "caslib": parameter.model_caslib,
+        }
+        action_dict["modelTable"] = model_table_spec
+        # Add SAS score code if provided
+        action_dict["code"] = parameter.sas_score_code
 
         return action_dict
 
