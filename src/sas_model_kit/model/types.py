@@ -16,6 +16,9 @@ Examples:
 from __future__ import annotations
 
 from enum import Enum
+from typing import TypedDict
+
+from typing_extensions import Required
 
 
 class ModelTableType(str, Enum):
@@ -59,3 +62,22 @@ class ModelTableType(str, Enum):
             'ASTORE'
         """
         return self.value
+
+
+class ShapleyValues(TypedDict):
+    """TypedDict for Shapley values representation.
+
+    Represents the structure of Shapley values returned by explainModel actions.
+
+    Attributes:
+        Variable: Name of the feature variable
+        ShapleyValue: Corresponding Shapley value for the variable
+    Examples:
+        >>> shapley: ShapleyValues = {
+        ...     "Variable": "age",
+        ...     "ShapleyValue": 0.25
+        ... }
+    """
+
+    Variable: Required[str]
+    ShapleyValue: Required[float]

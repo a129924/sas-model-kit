@@ -9,6 +9,7 @@ from sas_model_kit.model.payloads import (
     DataStepPayload,
     ExplainPayload,
 )
+from sas_model_kit.model.types import ShapleyValues
 
 
 class TestAstorePayload:
@@ -79,7 +80,7 @@ class TestExplainPayload:
 
     def test_creation_minimal(self) -> None:
         """Test creating ExplainPayload with minimal fields."""
-        shapley_data = [
+        shapley_data: list[ShapleyValues] = [
             {"Variable": "age", "ShapleyValue": 0.15},
             {"Variable": "income", "ShapleyValue": 0.32},
         ]
@@ -92,7 +93,7 @@ class TestExplainPayload:
 
     def test_creation_with_output_location(self) -> None:
         """Test creating ExplainPayload with output location."""
-        shapley_data = [{"Variable": "x", "ShapleyValue": 0.5}]
+        shapley_data: list[ShapleyValues] = [{"Variable": "x", "ShapleyValue": 0.5}]
 
         payload = ExplainPayload(
             shapley_values=shapley_data,
