@@ -37,32 +37,39 @@ from sas_model_kit.parameter import (
 class AstoreParameterToSwatDictMapper(ParameterMapper[AstoreParameter]):
     """Maps AstoreParameter to SWAT astore.score action dictionary.
 
-    Converts domain AstoreParameter into SWAT's expected format for
-    the astore.score action call.
+        Converts domain AstoreParameter into SWAT's expected format for
+        the astore.score action call.
 
-    SWAT astore.score requires:
-        - table: Input table specification
-        - rstore: Model store specification
-        - out: Output table specification (casout)
-        - code: Optional DS2 code parameter
+        SWAT astore.score requires:
+            - table: Input table specification
+            - rstore: Model store specification
+            - out: Output table specification (casout)
+            - code: Optional DS2 code parameter
 
-    Examples:
-        >>> param = AstoreParameter(
-        ...     input_caslib="public",
-        ...     input_table="customers",
-        ...     model_caslib="models",
-        ...     model_table="my_astore",
-        ...     score_code="dcl double x1-x5; ..."
-        ... )
-        >>> mapper = AstoreParameterToSwatDictMapper()
-        >>> swat_dict = mapper.map(param)
-        >>> # Returns:
-        >>> # {
-        >>> #     "table": {"name": "customers", "caslib": "public"},
-        >>> #     "rstore": {"name": "my_astore", "caslib": "models"},
-        >>> #     "out": {"name": "scored_data", "caslib": "public", "replace": True},
-        >>> #     "code": "dcl double x1-x5; ..."
-        >>> # }
+        Examples:
+            >>> param = AstoreParameter(
+            ...     input_caslib="public",
+            ...     input_table="customers",
+            ...     model_caslib="models",
+            ...     model_table="my_astore",
+            ...     score_code="dcl double x1-x5; ..."
+            ... )
+            >>> mapper = AstoreParameterToSwatDictMapper()
+            >>> swat_dict = mapper.map(param)
+            >>> # Returns:
+            >>> # {
+            >>> #     "table": {"name": "customers", "caslib": "public"},
+            >>> #     "rstore": {"name": "my_astore", "caslib": "models"},
+            >>> #     "out": {"name": "scored_data", "caslib": "public", "replace": True},
+            >>> #     "code": "dcl double x1-x5; ..."
+            >>> # }
+
+    cas_result = conn.astore.score(
+        table={"name": input_table, "caslib": input_caslib},
+        rstore={"name": model_table, "caslib": model_caslib},
+        casout={"name": output_table, "caslib": output_caslib},
+        ds2code=content,
+    )
     """
 
     @override
@@ -124,37 +131,56 @@ class AstoreParameterToSwatDictMapper(ParameterMapper[AstoreParameter]):
 class ExplainParameterToSwatDictMapper(ParameterMapper[ExplainParameter]):
     """Maps ExplainParameter to SWAT explainModel.shapleyExplainer action dictionary.
 
-    Converts domain ExplainParameter into SWAT's expected format for
-    the explainModel.shapleyExplainer action call.
+        Converts domain ExplainParameter into SWAT's expected format for
+        the explainModel.shapleyExplainer action call.
 
-    Important:
-        - SWAT explainModel.shapleyExplainer only handles ONE row at a time
-        - where_condition MUST filter to exactly one observation
-        - Caller is responsible for looping over multiple IDs
+        Important:
+            - SWAT explainModel.shapleyExplainer only handles ONE row at a time
+            - where_condition MUST filter to exactly one observation
+            - Caller is responsible for looping over multiple IDs
 
-    SWAT explainModel.shapleyExplainer requires:
-        - modelTableType: "ASTORE" or "DATASTEP"
-        - id: ID column name
-        - depth: Shapley calculation depth
-        - trainTable: Training data for reference
-        - code: Optional SAS score code
+        SWAT explainModel.shapleyExplainer requires:
+            - modelTableType: "ASTORE" or "DATASTEP"
+            - id: ID column name
+            - depth: Shapley calculation depth
+            - trainTable: Training data for reference
+            - code: Optional SAS score code
 
-    Examples:
-        >>> param = ExplainParameter(
-        ...     train_caslib="public",
-        ...     train_table="training",
-        ...     predicted_target="churn",
-        ...     features=["age", "income", "tenure"],
-        ...     id_cols={"customer_id"},
-        ...     depth=1,
-        ...     model_caslib="models",
-        ...     model_table="my_astore"
-        ... )
-        >>> mapper = ExplainParameterToSwatDictMapper()
-        >>> swat_dict = mapper.map(
-        ...     param,
-        ...     where_condition="customer_id=123"
-        ... )
+        Examples:
+            >>> param = ExplainParameter(
+            ...     train_caslib="public",
+            ...     train_table="training",
+            ...     predicted_target="churn",
+            ...     features=["age", "income", "tenure"],
+            ...     id_cols={"customer_id"},
+            ...     depth=1,
+            ...     model_caslib="models",
+            ...     model_table="my_astore"
+            ... )
+            >>> mapper = ExplainParameterToSwatDictMapper()
+            >>> swat_dict = mapper.map(
+            ...     param,
+            ...     where_condition="customer_id=123"
+            ... )
+
+    explan_model_result = conn.explainModel.shapleyExplainer(
+        table={"caslib": train_caslib, "name": train_table_name},
+        query={
+            "name": output_table,
+            "caslib": output_caslib,
+            "where": '<where query>' # 我測過只能一筆一筆這樣打 超過一筆就會報錯
+        },
+        id=id_,         # ← SWAT 會保留這個欄位 # set[str]
+        inputs=features, # list[str]
+        modelTable={
+            "name" : model_table,
+            "caslib" : model_caslib,
+        },
+        modelTableType="<ASTORE | DataStep>",
+        predictedTarget=predicted_target, # str
+        code=sas_code,
+        depth=1
+    )
     """
 
     @override
@@ -162,7 +188,7 @@ class ExplainParameterToSwatDictMapper(ParameterMapper[ExplainParameter]):
         """Map ExplainParameter to explainModel.shapleyExplainer dictionary.
 
         Args:
-            parameter: ExplainParameter with training and model spec
+            parameter: ExplainParameter with training, model spec, and explicit model_table_type
             **context: Runtime context (where_condition, output locations)
 
         Returns:
@@ -172,21 +198,11 @@ class ExplainParameterToSwatDictMapper(ParameterMapper[ExplainParameter]):
             ValueError: If required parameters missing or invalid
 
         Note:
-            where_condition in context should filter to exactly one row
+            - model_table_type must be explicitly provided (not inferred)
+            - where_condition in context should filter to exactly one row
         """
         # Validate parameter
         parameter.validate()
-
-        # Determine model type
-        if parameter.model_caslib and parameter.model_table:
-            model_type = "ASTORE"
-        elif parameter.sas_score_code:
-            model_type = "DATASTEP"
-        else:
-            raise ValueError(
-                "Parameter must have either ASTORE (model_caslib/model_table) "
-                "or DataStep (sas_score_code)"
-            )
 
         # Build training table spec
         train_table_spec = {
@@ -195,6 +211,9 @@ class ExplainParameterToSwatDictMapper(ParameterMapper[ExplainParameter]):
         }
 
         # Build base action dictionary
+        # model_table_type is explicitly required in parameter
+        model_type = parameter.model_table_type.value
+
         action_dict: dict[str, Any] = {
             "modelTableType": model_type,
             "id": ",".join(parameter.id_cols),  # Join multiple ID cols
@@ -253,7 +272,9 @@ class DataStepParameterToSwatDictMapper(ParameterMapper[DataStepParameter]):
         ...         set public.raw;
         ...         new_var = var1 * 2;
         ...         run;
-        ...     \"\"\"
+        ...     \"\"\",
+        ...     output_caslib="public",
+        ...     output_table="processed"
         ... )
         >>> mapper = DataStepParameterToSwatDictMapper()
         >>> swat_dict = mapper.map(param)
@@ -262,6 +283,11 @@ class DataStepParameterToSwatDictMapper(ParameterMapper[DataStepParameter]):
         >>> #     "code": "data public.processed; ...",
         >>> #     "single": True  # Execute on single node
         >>> # }
+
+    cas_result = conn.datastep.runCode(
+        code=score_code,
+        single=True,  # Execute on single node
+    )
     """
 
     @override
@@ -269,14 +295,14 @@ class DataStepParameterToSwatDictMapper(ParameterMapper[DataStepParameter]):
         """Map DataStepParameter to datastep.runCode action dictionary.
 
         Args:
-            parameter: DataStepParameter with code specification
+            parameter: DataStepParameter with code and output location
             **context: Runtime context (optional, unused for DataStep)
 
         Returns:
             Dictionary suitable for session.datastep.runCode(**dict)
 
         Raises:
-            ValueError: If code is missing or invalid
+            ValueError: If code or output location is missing or invalid
         """
         # Validate parameter
         parameter.validate()
@@ -286,9 +312,4 @@ class DataStepParameterToSwatDictMapper(ParameterMapper[DataStepParameter]):
             "code": parameter.score_code,
             "single": True,  # Execute on single thread/node
         }
-
-        # Add optional casout if provided
-        if parameter.casout:
-            action_dict["casout"] = parameter.casout.copy()
-
         return action_dict

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from sas_model_kit.model.types import ModelTableType
 from sas_model_kit.parameter import ExplainParameter
 
 
@@ -18,6 +19,7 @@ def test_explain_parameter_creation_minimal_astore() -> None:
         depth=2,
         model_caslib="models",
         model_table="my_astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     assert param.train_caslib == "public"
@@ -31,7 +33,6 @@ def test_explain_parameter_creation_minimal_astore() -> None:
     assert param.score_caslib is None
     assert param.score_table is None
     assert param.sas_score_code is None
-    assert param.casout is None
 
 
 def test_explain_parameter_creation_with_datastep() -> None:
@@ -45,6 +46,7 @@ def test_explain_parameter_creation_with_datastep() -> None:
         id_cols={"id"},
         depth=1,
         sas_score_code=sas_code,
+        model_table_type=ModelTableType.DATASTEP,
     )
 
     assert param.sas_score_code == sas_code
@@ -65,28 +67,11 @@ def test_explain_parameter_with_score_data() -> None:
         depth=2,
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     assert param.score_caslib == "public"
     assert param.score_table == "test_data"
-
-
-def test_explain_parameter_with_casout() -> None:
-    """Test ExplainParameter with custom casout."""
-    casout = {"name": "explain_results", "promote": True}
-    param = ExplainParameter(
-        train_caslib="public",
-        train_table="training_data",
-        predicted_target="target",
-        features=["f1"],
-        id_cols={"id"},
-        depth=1,
-        model_caslib="models",
-        model_table="astore",
-        casout=casout,
-    )
-
-    assert param.casout == casout
 
 
 def test_explain_parameter_validates_train_caslib() -> None:
@@ -100,6 +85,7 @@ def test_explain_parameter_validates_train_caslib() -> None:
         depth=1,
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     with pytest.raises(ValueError, match="train_caslib cannot be empty"):
@@ -117,6 +103,7 @@ def test_explain_parameter_validates_train_table() -> None:
         depth=1,
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     with pytest.raises(ValueError, match="train_table cannot be empty"):
@@ -134,6 +121,7 @@ def test_explain_parameter_validates_predicted_target() -> None:
         depth=1,
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     with pytest.raises(ValueError, match="predicted_target cannot be empty"):
@@ -151,6 +139,7 @@ def test_explain_parameter_validates_features_not_empty() -> None:
         depth=1,
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     with pytest.raises(ValueError, match="features must be a non-empty list"):
@@ -168,6 +157,7 @@ def test_explain_parameter_validates_features_is_list() -> None:
         depth=1,
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     with pytest.raises(ValueError, match="features must be a non-empty list"):
@@ -185,6 +175,7 @@ def test_explain_parameter_validates_id_cols_not_empty() -> None:
         depth=1,
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     with pytest.raises(ValueError, match="id_cols must be a non-empty set"):
@@ -202,6 +193,7 @@ def test_explain_parameter_validates_id_cols_is_set() -> None:
         depth=1,
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     with pytest.raises(ValueError, match="id_cols must be a non-empty set"):
@@ -219,6 +211,7 @@ def test_explain_parameter_validates_depth_positive() -> None:
         depth=0,  # Invalid: not positive
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     with pytest.raises(ValueError, match="depth must be a positive integer"):
@@ -236,6 +229,7 @@ def test_explain_parameter_validates_depth_negative() -> None:
         depth=-1,  # Invalid: negative
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     with pytest.raises(ValueError, match="depth must be a positive integer"):
@@ -256,6 +250,7 @@ def test_explain_parameter_validates_score_caslib_and_table_paired() -> None:
         score_table=None,
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     with pytest.raises(
@@ -264,9 +259,9 @@ def test_explain_parameter_validates_score_caslib_and_table_paired() -> None:
         param.validate()
 
 
-def test_explain_parameter_validates_model_caslib_and_table_paired() -> None:
-    """Test validation that model_caslib and model_table must be paired."""
-    # Only model_caslib, missing model_table
+def test_explain_parameter_validates_at_least_one_model() -> None:
+    """Test validation that model must match model_table_type."""
+    # DataStep model_table_type but no sas_score_code
     param = ExplainParameter(
         train_caslib="public",
         train_table="training_data",
@@ -274,69 +269,32 @@ def test_explain_parameter_validates_model_caslib_and_table_paired() -> None:
         features=["f1"],
         id_cols={"id"},
         depth=1,
+        model_table_type=ModelTableType.DATASTEP,
+        sas_score_code=None,  # Invalid for DATASTEP
+    )
+
+    with pytest.raises(ValueError, match="sas_score_code is required"):
+        param.validate()
+
+
+def test_explain_parameter_validates_astore_requires_model_caslib_and_table() -> None:
+    """Test validation that ASTORE model_table_type requires caslib and table."""
+    # ASTORE model_table_type but missing model_table
+    param = ExplainParameter(
+        train_caslib="public",
+        train_table="training_data",
+        predicted_target="target",
+        features=["f1"],
+        id_cols={"id"},
+        depth=1,
+        model_table_type=ModelTableType.ASTORE,
         model_caslib="models",
         model_table="",  # Invalid: empty
-        sas_score_code=None,  # No DataStep model
     )
 
     with pytest.raises(
-        ValueError, match="model_caslib and model_table must both be provided"
+        ValueError, match="model_caslib and model_table must be provided"
     ):
-        param.validate()
-
-
-def test_explain_parameter_validates_at_least_one_model() -> None:
-    """Test validation that at least one model must be provided."""
-    # Neither ASTORE nor DataStep
-    param = ExplainParameter(
-        train_caslib="public",
-        train_table="training_data",
-        predicted_target="target",
-        features=["f1"],
-        id_cols={"id"},
-        depth=1,
-        model_caslib=None,
-        model_table=None,
-        sas_score_code=None,
-    )
-
-    with pytest.raises(ValueError, match="At least one model must be provided"):
-        param.validate()
-
-
-def test_explain_parameter_validates_casout_dict() -> None:
-    """Test validation that casout is a dict."""
-    param = ExplainParameter(
-        train_caslib="public",
-        train_table="training_data",
-        predicted_target="target",
-        features=["f1"],
-        id_cols={"id"},
-        depth=1,
-        model_caslib="models",
-        model_table="astore",
-        casout="not_a_dict",  # type: ignore[arg-type]
-    )
-
-    with pytest.raises(ValueError, match="casout must be a dictionary or None"):
-        param.validate()
-
-
-def test_explain_parameter_validates_casout_has_name() -> None:
-    """Test validation that casout['name'] is required."""
-    param = ExplainParameter(
-        train_caslib="public",
-        train_table="training_data",
-        predicted_target="target",
-        features=["f1"],
-        id_cols={"id"},
-        depth=1,
-        model_caslib="models",
-        model_table="astore",
-        casout={"promote": True},  # Missing 'name'
-    )
-
-    with pytest.raises(ValueError, match="casout\\['name'\\]"):
         param.validate()
 
 
@@ -351,6 +309,7 @@ def test_explain_parameter_successful_validation_minimal() -> None:
         depth=1,
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     # Should not raise
@@ -370,8 +329,7 @@ def test_explain_parameter_successful_validation_with_all_fields() -> None:
         depth=3,
         model_caslib="models",
         model_table="astore",
-        sas_score_code="new_var = var1 * 2;",
-        casout={"name": "explain_output", "promote": True},
+        model_table_type=ModelTableType.ASTORE,
     )
 
     # Should not raise
@@ -389,6 +347,7 @@ def test_explain_parameter_immutability() -> None:
         depth=1,
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     with pytest.raises(AttributeError):
@@ -406,6 +365,7 @@ def test_explain_parameter_equality() -> None:
         depth=2,
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
     param2 = ExplainParameter(
         train_caslib="public",
@@ -416,6 +376,7 @@ def test_explain_parameter_equality() -> None:
         depth=2,
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
     param3 = ExplainParameter(
         train_caslib="public",
@@ -426,6 +387,7 @@ def test_explain_parameter_equality() -> None:
         depth=3,  # Different
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     assert param1 == param2
@@ -443,6 +405,7 @@ def test_explain_parameter_multiple_id_cols() -> None:
         depth=2,
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     assert param.id_cols == {"customer_id", "transaction_id"}
@@ -461,6 +424,7 @@ def test_explain_parameter_multiple_features() -> None:
         depth=3,
         model_caslib="models",
         model_table="astore",
+        model_table_type=ModelTableType.ASTORE,
     )
 
     assert param.features == features
@@ -478,6 +442,7 @@ def test_explain_parameter_only_datastep_model() -> None:
         id_cols={"id"},
         depth=1,
         sas_score_code="new_var = var1 * var2;",
+        model_table_type=ModelTableType.DATASTEP,
     )
 
     assert param.sas_score_code is not None
@@ -498,6 +463,7 @@ def test_explain_parameter_with_score_data_only() -> None:
         id_cols={"id"},
         depth=1,
         sas_score_code="new_var = var1 * 2;",
+        model_table_type=ModelTableType.DATASTEP,
     )
 
     assert param.score_caslib == "public"

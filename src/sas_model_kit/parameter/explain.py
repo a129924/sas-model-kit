@@ -7,9 +7,10 @@ via Shapley value computation, supporting both ASTORE and DataStep models.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from typing_extensions import override
+
+from sas_model_kit.model.types import ModelTableType
 
 from .base import BaseModelParameter
 
@@ -36,22 +37,22 @@ class ExplainParameter(BaseModelParameter):
         predicted_target: Target/prediction variable name for explanation (REQUIRED)
         features: List of feature column names for Shapley calculation (REQUIRED, non-empty)
         id_cols: Set of ID column names to preserve in results (REQUIRED, non-empty)
-                 CRITICAL: SWAT uses this to map results back to original records
         depth: Shapley explanation depth (REQUIRED, >= 1, typically 1-10)
-        model_caslib: ASTORE model library (OPTIONAL - must have model_table if present)
-        model_table: ASTORE model table (OPTIONAL - must have model_caslib if present)
-        sas_score_code: DataStep preprocessing code (OPTIONAL)
-        casout: Optional CAS output configuration dict. If None, framework auto-generates
-               with default settings. Supports keys: {name, caslib, replace, promote, backup}
+        model_table_type: Model type (REQUIRED: ASTORE or DATASTEP)
+        model_caslib: ASTORE model library (REQUIRED if model_table_type=ASTORE)
+        model_table: ASTORE model table (REQUIRED if model_table_type=ASTORE)
+        sas_score_code: DataStep code (REQUIRED if model_table_type=DATASTEP)
 
     Validation Rules:
         - train_caslib, train_table: always required
         - score_caslib, score_table: both required or both None
         - predicted_target, features, id_cols, depth: always required
-        - At least one model must be provided: (model_caslib+model_table) OR sas_score_code
+        - model_table_type: must be specified (ASTORE or DATASTEP)
+        - If model_table_type=ASTORE: model_caslib + model_table required
+        - If model_table_type=DATASTEP: sas_score_code required
 
     Examples:
-        >>> # Minimal: ASTORE model, auto-generated output
+        >>> # ASTORE model
         >>> param = ExplainParameter(
         ...     train_caslib="public",
         ...     train_table="training_data",
@@ -59,13 +60,14 @@ class ExplainParameter(BaseModelParameter):
         ...     features=["age", "income", "tenure"],
         ...     id_cols={"customer_id"},
         ...     depth=1,
+        ...     model_table_type=ModelTableType.ASTORE,
         ...     model_caslib="models",
         ...     model_table="my_astore",
         ... )
         >>> param.validate()
 
-        >>> # With scoring data and DataStep preprocessing
-        >>> param_complex = ExplainParameter(
+        >>> # DataStep model with scoring data
+        >>> param_datastep = ExplainParameter(
         ...     train_caslib="public",
         ...     train_table="training_data",
         ...     score_caslib="public",
@@ -74,10 +76,8 @@ class ExplainParameter(BaseModelParameter):
         ...     features=["age", "income", "tenure"],
         ...     id_cols={"customer_id"},
         ...     depth=2,
-        ...     model_caslib="models",
-        ...     model_table="my_astore",
-        ...     sas_score_code="new_var = var1 + var2;",
-        ...     casout={"name": "explain_results", "promote": True}
+        ...     model_table_type=ModelTableType.DATASTEP,
+        ...     sas_score_code="y = a*x1 + b*x2;",
         ... )
     """
 
@@ -90,18 +90,16 @@ class ExplainParameter(BaseModelParameter):
     features: list[str]
     id_cols: set[str]
     depth: int
+    model_table_type: ModelTableType
 
     # Scoring layer (optional - must be paired)
     score_caslib: str | None = None
     score_table: str | None = None
 
-    # Model definition (one required: ASTORE or DataStep)
-    model_caslib: str | None = None
-    model_table: str | None = None
-    sas_score_code: str | None = None
-
-    # Output configuration (optional)
-    casout: dict[str, Any] | None = None
+    # Model definition (required: specify type and matching implementation)
+    model_caslib: str | None = None  # Required if model_table_type=ASTORE
+    model_table: str | None = None  # Required if model_table_type=ASTORE
+    sas_score_code: str | None = None  # Required if model_table_type=DATASTEP
 
     @override
     def validate(self) -> None:
@@ -143,36 +141,28 @@ class ExplainParameter(BaseModelParameter):
             msg = f"depth must be a positive integer, got {self.depth}"
             raise ValueError(msg)
 
-        # Validate model definition structure
-        # If ASTORE fields are provided, both must exist and be non-empty
-        if (self.model_caslib is not None or self.model_table is not None) and not (
-            self.model_caslib and self.model_table
-        ):
-            msg = "model_caslib and model_table must both be provided or both be None"
-            raise ValueError(msg)
-
-        # Validate that at least one model is provided
-        has_astore = (
-            self.model_caslib is not None
-            and self.model_caslib
-            and self.model_table is not None
-            and self.model_table
-        )
-        has_datastep = self.sas_score_code is not None and self.sas_score_code
-
-        if not (has_astore or has_datastep):
-            msg = (
-                "At least one model must be provided: "
-                "(model_caslib + model_table) for ASTORE or "
-                "sas_score_code for DataStep"
-            )
-            raise ValueError(msg)
-
-        # Validate casout if provided
-        if self.casout is not None:
-            if not isinstance(self.casout, dict):
-                msg = "casout must be a dictionary or None"
+        # Validate model definition - type-specific validation
+        if self.model_table_type == ModelTableType.ASTORE:
+            if not self.model_caslib or not self.model_table:
+                msg = (
+                    "For ASTORE model type, "
+                    "both model_caslib and model_table must be provided"
+                )
                 raise ValueError(msg)
-            if "name" not in self.casout or not self.casout["name"]:
-                msg = "casout['name'] is required when casout is provided"
+            if self.sas_score_code:
+                msg = "For ASTORE model type, sas_score_code should not be provided"
                 raise ValueError(msg)
+
+        elif self.model_table_type == ModelTableType.DATASTEP:
+            if not self.sas_score_code:
+                msg = "For DATASTEP model type, sas_score_code is required"
+                raise ValueError(msg)
+            if self.model_caslib or self.model_table:
+                msg = (
+                    "For DATASTEP model type, "
+                    "model_caslib and model_table should not be provided"
+                )
+                raise ValueError(msg)
+        else:
+            msg = f"Invalid model_table_type: {self.model_table_type}"
+            raise ValueError(msg)

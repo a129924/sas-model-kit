@@ -9,6 +9,7 @@ from sas_model_kit.model.mapper.swat import (
     DataStepParameterToSwatDictMapper,
     ExplainParameterToSwatDictMapper,
 )
+from sas_model_kit.model.types import ModelTableType
 from sas_model_kit.parameter import (
     AstoreParameter,
     DataStepParameter,
@@ -113,6 +114,7 @@ class TestExplainParameterToSwatDictMapper:
             features=["age", "income"],
             id_cols={"customer_id"},
             depth=1,
+            model_table_type=ModelTableType.ASTORE,
             model_caslib="models",
             model_table="astore_model",
         )
@@ -145,6 +147,7 @@ class TestExplainParameterToSwatDictMapper:
             features=["f1", "f2"],
             id_cols={"id"},
             depth=2,
+            model_table_type=ModelTableType.DATASTEP,
             sas_score_code="y = a*x1 + b*x2;",
         )
         mapper = ExplainParameterToSwatDictMapper()
@@ -167,6 +170,7 @@ class TestExplainParameterToSwatDictMapper:
             features=["f1"],
             id_cols={"id1", "id2", "id3"},
             depth=1,
+            model_table_type=ModelTableType.ASTORE,
             model_caslib="models",
             model_table="model",
         )
@@ -191,6 +195,7 @@ class TestExplainParameterToSwatDictMapper:
             features=["f1"],
             id_cols={"id"},
             depth=1,
+            model_table_type=ModelTableType.ASTORE,
             model_caslib="models",
             model_table="model",
             score_caslib="public",
@@ -203,24 +208,6 @@ class TestExplainParameterToSwatDictMapper:
 
         # Assert
         assert result["scoreTable"] == {"name": "test_data", "caslib": "public"}
-
-    def test_map_no_model_raises_error(self) -> None:
-        """Should raise ValueError if no model specified."""
-        # Arrange
-        param = ExplainParameter(
-            train_caslib="public",
-            train_table="training",
-            predicted_target="target",
-            features=["f1"],
-            id_cols={"id"},
-            depth=1,
-            # No model_caslib/model_table or sas_score_code
-        )
-        mapper = ExplainParameterToSwatDictMapper()
-
-        # Act & Assert
-        with pytest.raises(ValueError, match="model"):
-            mapper.map(param)
 
 
 class TestDataStepParameterToSwatDictMapper:
@@ -235,7 +222,11 @@ class TestDataStepParameterToSwatDictMapper:
             x = a + b;
             run;
         """
-        param = DataStepParameter(score_code=code)
+        param = DataStepParameter(
+            score_code=code,
+            output_caslib="public",
+            output_table="result",
+        )
         mapper = DataStepParameterToSwatDictMapper()
 
         # Act
@@ -245,12 +236,13 @@ class TestDataStepParameterToSwatDictMapper:
         assert result["code"] == code
         assert result["single"] is True
 
-    def test_map_with_casout(self) -> None:
-        """Should include casout if provided."""
+    def test_map_with_output_location(self) -> None:
+        """Should accept output location specification."""
         # Arrange
         param = DataStepParameter(
-            score_code="data x; run;",
-            casout={"name": "output", "caslib": "public"},
+            score_code="data output; set input; run;",
+            output_caslib="public",
+            output_table="output",
         )
         mapper = DataStepParameterToSwatDictMapper()
 
@@ -258,14 +250,34 @@ class TestDataStepParameterToSwatDictMapper:
         result = mapper.map(param)
 
         # Assert
-        assert result["casout"] == {"name": "output", "caslib": "public"}
+        # Output location is part of the code, not separate in SWAT action
+        assert result["code"] == param.score_code
+        assert result["single"] is True
 
-    def test_map_invalid_parameter(self) -> None:
+    def test_map_invalid_parameter_no_code(self) -> None:
         """Should raise ValueError for empty code."""
         # Arrange
-        param = DataStepParameter(score_code="")  # Invalid: empty
+        param = DataStepParameter(
+            score_code="",  # Invalid: empty
+            output_caslib="public",
+            output_table="result",
+        )
         mapper = DataStepParameterToSwatDictMapper()
 
         # Act & Assert
         with pytest.raises(ValueError, match="score_code"):
+            mapper.map(param)
+
+    def test_map_invalid_parameter_no_output_caslib(self) -> None:
+        """Should raise ValueError for missing output_caslib."""
+        # Arrange
+        param = DataStepParameter(
+            score_code="data x; run;",
+            output_caslib="",  # Invalid: empty
+            output_table="result",
+        )
+        mapper = DataStepParameterToSwatDictMapper()
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="output_caslib"):
             mapper.map(param)
