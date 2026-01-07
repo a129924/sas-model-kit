@@ -5,13 +5,20 @@ This module implements OperationProtocol for SWAT (SAS Scripting Wrapper
 for Analytics Transfer), adapting SWAT's CAS session API to our protocol.
 """
 
-from typing import Any
+from typing import Any, NamedTuple
 
 import swat
 from pandas import DataFrame
 from typing_extensions import override
 
 from sas_model_kit.operation.base import BaseOperation
+
+
+class ActionSetName(NamedTuple):
+    """Helper named tuple for actionset and action names."""
+
+    actionset: str
+    action: str
 
 
 class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame]):
@@ -48,7 +55,7 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame]):
             connection: SWAT CAS session
         """
         super().__init__(connection)
-        self._loaded_actionsets: set[str] = set()
+        self._loaded_actionsets: set[str] = set()  # set[swat.ActionSetName: str]
 
     @override
     def _check_connection_type(self, connection: Any) -> None:
@@ -101,9 +108,7 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame]):
             )
 
         # Parse actionset and action
-        parts = action_name.split(".", 1)
-        actionset_name = parts[0]
-        action_method = parts[1]
+        actionset_name, action_method = self._parse_action_name(action_name)
 
         # Auto-load actionset if not already loaded
         self._ensure_actionset_loaded(actionset_name)
@@ -124,6 +129,20 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame]):
         except Exception as e:
             raise RuntimeError(f"Failed to execute action '{action_name}': {e}") from e
 
+    def _parse_action_name(self, action_name: str) -> ActionSetName:
+        """Parse action_name into ActionSetName named tuple.
+
+        Args:
+            action_name: Action name in 'actionset.action' format
+
+        Returns:
+            ActionSetName named tuple with actionset and action attributes
+        """
+
+        parts = action_name.split(".", 1)
+
+        return ActionSetName(actionset=parts[0], action=parts[1])
+
     def _ensure_actionset_loaded(self, actionset_name: str) -> None:
         """Ensure actionset is loaded, loading it if necessary.
 
@@ -142,19 +161,26 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame]):
 
         # Check if actionset is loaded on server
         # Note: has_actionset() is a SWAT CAS session method
-        if not hasattr(
-            self._session, "has_actionset"
-        ) or not self._session.has_actionset(actionset_name):
-            # Load actionset on server
-            try:
-                self._session.loadactionset(actionset_name)
-            except Exception as e:
-                # TODO: Consider logging warning here
-                # Log but don't fail - server might already have it loaded
-                # or it might fail gracefully in the actual call_action
-                pass
+        if hasattr(self._session, "has_actionset") and self._session.has_actionset(
+            actionset_name
+        ):
+            # Already loaded on server; mark as loaded in this instance
+            self._loaded_actionsets.add(actionset_name)
+            return
 
-        # Mark as loaded in this instance
+        # Load actionset on server if not already loaded or has_actionset is unavailable
+        try:
+            self._session.loadactionset(actionset_name)
+        except Exception as e:
+            from warnings import warn
+
+            warn(
+                f"Warning: Failed to load actionset '{actionset_name}': {e}",
+                stacklevel=2,
+            )
+
+        # Mark as loaded in this instance regardless of success/failure
+        # This prevents repeated load attempts for unavailable actionsets
         self._loaded_actionsets.add(actionset_name)
 
     @override
