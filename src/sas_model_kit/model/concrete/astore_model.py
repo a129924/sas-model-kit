@@ -92,11 +92,12 @@ class AstoreModel(SyncModel[AstoreParameter, AstorePayload]):
             payload = self.executor.execute(operation, parameter, **context)
 
             # Wrap in ModelSuccess
+            # Extract execution time from context (set by executor)
+            execution_time_ms = context.get("execution_time_ms", 0.0)
             success = ModelSuccess(
                 data=payload,
-                # TODO: 要看 要不要加上時間
                 metadata=ExecutionMetadata(
-                    execution_time_ms=0.0,
+                    execution_time_ms=execution_time_ms,
                     rows_affected=payload.rows_scored,
                 ),
             )
@@ -106,9 +107,8 @@ class AstoreModel(SyncModel[AstoreParameter, AstorePayload]):
             # Convert to ModelError
             error = ModelError(
                 message=f"ASTORE model execution failed: {str(e)}",
-                # TODO: 要看 要不要加上時間
                 metadata=ExecutionMetadata(
-                    execution_time_ms=0.0,
+                    execution_time_ms=context.get("execution_time_ms", 0.0),
                     rows_affected=0,
                 ),
                 cause=e,

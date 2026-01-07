@@ -25,9 +25,65 @@ from sas_model_kit.operation import OperationProtocol
 from sas_model_kit.parameter import AstoreParameter, DataStepParameter, ExplainParameter
 
 
+def _extract_timing_ms(result: CASResults) -> float:
+    """Extract total execution time in milliseconds from Timing SASDataFrame.
+
+    The astore.score action returns Timing with rows:
+    - Loading the Store
+    - Creating the State
+    - Scoring
+    - Total
+
+    Returns:
+        Total execution time in milliseconds, or 0.0 if not found.
+    """
+    if hasattr(result, "get"):
+        timing: SASDataFrame | None = cast(
+            SASDataFrame | None, result.get("Timing", None)
+        )
+        if timing is not None and not timing.empty:
+            return (
+                timing[timing["Task"] == "Total"]["Seconds"].values[0] * 1000.0
+            ).item()
+    return 0.0
+
+
+def _extract_rows_from_output_tables(result: CASResults) -> int:
+    """Extract row count from OutputCasTables SASDataFrame.
+
+    The astore.score action returns OutputCasTables with row counts.
+    This is more reliable than ScoreInfo.
+
+    Returns:
+        Row count from first table, or -1 if not found.
+    """
+    if hasattr(result, "get"):
+        output_tables: SASDataFrame | None = cast(
+            SASDataFrame | None, result.get("OutputCasTables", None)
+        )
+        if output_tables is not None and not output_tables.empty:
+            records = output_tables.to_dict(orient="records")
+            if records and "Rows" in records[0]:
+                return int(records[0]["Rows"])
+    return -1
+
+
 def _extract_rows_scored(result: CASResults) -> int:
-    """Best-effort extraction of scored row count from SWAT results."""
-    # TODO: 尚未被證實
+    """Best-effort extraction of scored row count from SWAT results.
+
+    Tries multiple sources in order of preference:
+    1. OutputCasTables (most reliable)
+    2. ScoreInfo (fallback)
+
+    Returns:
+        Row count, or -1 if unable to determine.
+    """
+    # Try OutputCasTables first (most reliable)
+    rows = _extract_rows_from_output_tables(result)
+    if rows > -1:
+        return rows
+
+    # Fallback to ScoreInfo
     score_info = None
     if hasattr(result, "get"):
         score_info = result.get("ScoreInfo") or result.get("scoreinfo")
@@ -87,6 +143,10 @@ class SwatAstoreExecutor(ModelExecutor[AstoreParameter, AstorePayload]):
         output_caslib = casout.get("caslib") or ""
         output_table = casout.get("name") or ""
         rows_scored = _extract_rows_scored(result)
+        timing_ms = _extract_timing_ms(result)
+
+        # Store timing in context for Model layer to use
+        context["execution_time_ms"] = timing_ms
 
         return AstorePayload(
             output_caslib=output_caslib,
