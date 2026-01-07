@@ -121,8 +121,8 @@ class AstoreParameterToSwatDictMapper(ParameterMapper[AstoreParameter]):
         action_dict = {
             "table": table_spec,
             "rstore": rstore_spec,
-            "out": out_spec,
-            "code": parameter.score_code,
+            "casout": out_spec,
+            "ds2code": parameter.score_code,
         }
 
         return action_dict
@@ -206,8 +206,8 @@ class ExplainParameterToSwatDictMapper(ParameterMapper[ExplainParameter]):
 
         # Build training table spec
         train_table_spec = {
-            "name": parameter.train_table,
             "caslib": parameter.train_caslib,
+            "name": parameter.train_table,
         }
 
         # Build base action dictionary
@@ -215,13 +215,24 @@ class ExplainParameterToSwatDictMapper(ParameterMapper[ExplainParameter]):
         model_type = parameter.model_table_type.value
 
         action_dict: dict[str, Any] = {
-            "modelTableType": model_type,
-            "id": ",".join(parameter.id_cols),  # Join multiple ID cols
+            "table": train_table_spec,
+            "id": list(parameter.id_cols),  # ID columns as list
             "depth": parameter.depth,
-            "trainTable": train_table_spec,
-            "target": parameter.predicted_target,
-            "inputs": ",".join(parameter.features),  # Join feature names
+            "inputs": parameter.features,  # Features as list
+            "modelTableType": model_type,
+            "predictedTarget": parameter.predicted_target,
         }
+
+        # Build query dict with where condition and output location
+        query_dict: dict[str, Any] = {}
+        if "where_condition" in context and context["where_condition"]:
+            query_dict["where"] = context["where_condition"]
+        if "output_caslib" in context and "output_table" in context:
+            query_dict["name"] = context["output_table"]
+            query_dict["caslib"] = context["output_caslib"]
+        
+        if query_dict:
+            action_dict["query"] = query_dict
 
         # Add model spec based on type
         if model_type == "ASTORE":
@@ -237,18 +248,6 @@ class ExplainParameterToSwatDictMapper(ParameterMapper[ExplainParameter]):
             action_dict["scoreTable"] = {
                 "name": parameter.score_table,
                 "caslib": parameter.score_caslib,
-            }
-
-        # Add where condition if provided (filters to specific rows)
-        if "where_condition" in context and context["where_condition"]:
-            action_dict["where"] = context["where_condition"]
-
-        # Add output spec if provided
-        if "output_caslib" in context and "output_table" in context:
-            action_dict["out"] = {
-                "name": context["output_table"],
-                "caslib": context["output_caslib"],
-                "replace": True,
             }
 
         return action_dict

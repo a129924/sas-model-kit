@@ -38,9 +38,9 @@ class TestAstoreParameterToSwatDictMapper:
         # Assert
         assert result["table"] == {"name": "customers", "caslib": "public"}
         assert result["rstore"] == {"name": "my_astore", "caslib": "models"}
-        assert result["out"]["caslib"] == "public"
-        assert result["out"]["name"] == "customers_scored"
-        assert result["code"] == "dcl double x1-x5;"
+        assert result["casout"]["caslib"] == "public"
+        assert result["casout"]["name"] == "customers_scored"
+        assert result["ds2code"] == "dcl double x1-x5;"
 
     def test_map_with_custom_casout(self) -> None:
         """Should use custom casout if provided."""
@@ -59,9 +59,9 @@ class TestAstoreParameterToSwatDictMapper:
         result = mapper.map(param)
 
         # Assert
-        assert result["out"]["name"] == "custom_output"
-        assert result["out"]["caslib"] == "results"
-        assert result["out"]["promote"] is True
+        assert result["casout"]["name"] == "custom_output"
+        assert result["casout"]["caslib"] == "results"
+        assert result["casout"]["promote"] is True
 
     def test_map_with_context_override(self) -> None:
         """Should use context to override output location."""
@@ -81,8 +81,8 @@ class TestAstoreParameterToSwatDictMapper:
         )
 
         # Assert
-        assert result["out"]["caslib"] == "custom_lib"
-        assert result["out"]["name"] == "custom_table"
+        assert result["casout"]["caslib"] == "custom_lib"
+        assert result["casout"]["name"] == "custom_table"
 
     def test_map_invalid_parameter(self) -> None:
         """Should raise ValueError for invalid parameter."""
@@ -125,17 +125,16 @@ class TestExplainParameterToSwatDictMapper:
 
         # Assert
         assert result["modelTableType"] == "ASTORE"
-        assert result["id"] == "customer_id"
+        assert result["id"] == ["customer_id"]
         assert result["depth"] == 1
-        assert result["trainTable"] == {"name": "training", "caslib": "public"}
-        assert result["target"] == "churn"
-        assert "age" in result["inputs"]
-        assert "income" in result["inputs"]
+        assert result["table"] == {"caslib": "public", "name": "training"}
+        assert result["predictedTarget"] == "churn"
+        assert result["inputs"] == ["age", "income"]
         assert result["modelTable"] == {
             "name": "astore_model",
             "caslib": "models",
         }
-        assert result["where"] == "customer_id=123"
+        assert result["query"]["where"] == "customer_id=123"
 
     def test_map_datastep_model(self) -> None:
         """Should map ExplainParameter with DataStep model."""
@@ -180,11 +179,11 @@ class TestExplainParameterToSwatDictMapper:
         result = mapper.map(param)
 
         # Assert
-        id_str = result["id"]
-        assert "id1" in id_str
-        assert "id2" in id_str
-        assert "id3" in id_str
-
+        id_list = result["id"]
+        assert len(id_list) == 3
+        assert "id1" in id_list
+        assert "id2" in id_list
+        assert "id3" in id_list
     def test_map_with_score_data(self) -> None:
         """Should include score data if provided."""
         # Arrange
