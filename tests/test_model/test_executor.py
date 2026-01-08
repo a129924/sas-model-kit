@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock
 
+from pandas import DataFrame
+from swat import CASTable, SASDataFrame
 from typing_extensions import override
 
 from sas_model_kit.model.executor import (
@@ -17,7 +19,7 @@ from sas_model_kit.operation import OperationProtocol
 from sas_model_kit.parameter import AstoreParameter, DataStepParameter, ExplainParameter
 
 
-class FakeOperation(OperationProtocol[Any]):
+class FakeOperation(OperationProtocol[DataFrame | SASDataFrame, CASTable]):
     """Test double for OperationProtocol that records action calls."""
 
     def __init__(self) -> None:
@@ -39,8 +41,10 @@ class FakeOperation(OperationProtocol[Any]):
         return {}
 
     @override
-    def upload_data(self, data: Any, caslib: str, table: str) -> None:
-        return None
+    def upload_data(self, data: Any, caslib: str, table: str) -> CASTable:
+        mock_table = MagicMock(spec=CASTable)
+        mock_table.params = {"name": table, "caslib": caslib}
+        return mock_table
 
     @override
     def table_exists(self, caslib: str, table: str) -> bool:
