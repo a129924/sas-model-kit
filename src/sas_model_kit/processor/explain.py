@@ -3,20 +3,21 @@
 Processes multiple IDs by calling explainModel.shapleyExplainer directly
 and persists aggregated results as CAS tables.
 
-Design:
+Design (CSRP):
     - Direct call_action (no ExplainModel dependency)
+    - Concrete class (not dataclass) inheriting BaseBatchProcessor
     - Generator-based: yields ExecutionSuccess or ExecutionError per ID
     - SASDataFrame → transform → upload → CASTable pipeline
     - Memory-efficient streaming (single-pass)
     - SWAT Bounded Context integration
+    - Final dependencies: parameter, transformer, batch_executor, mapper
 """
 
 from __future__ import annotations
 
 from collections.abc import Generator
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, cast
+from typing import Any, Final, cast
 
 from pandas import DataFrame
 from swat import CASTable, SASDataFrame
@@ -36,9 +37,14 @@ from sas_model_kit.processor.swat.mappers import SwatExplainParameterMapper
 from sas_model_kit.transformer.shapley_values import ShapleyValuesTransformer
 
 
-@dataclass(frozen=True)
 class BatchExplainProcessor(BaseBatchProcessor[dict[str, str]]):
     """Batch processor for Explain executions (CSRP).
+
+    Design:
+        - Concrete class (not dataclass) inheriting BaseBatchProcessor
+        - Final dependencies: parameter, transformer, batch_executor, mapper
+        - @override decorators on all abstract method implementations
+        - Immutable: cannot change attributes after __init__
 
     Direct call_action approach:
         - No ExplainModel dependency
@@ -47,17 +53,12 @@ class BatchExplainProcessor(BaseBatchProcessor[dict[str, str]]):
         - concat receives list[CASTable]
         - Streaming Append: single-pass efficiency (faster than list comprehension)
 
-    Attributes:
+    Attributes (Final):
         parameter: ExplainParameter with model and feature configuration
         transformer: Converts Shapley SASDataFrame to wide format + ID
         batch_executor: Handles upload/concat/cleanup operations
         mapper: Maps ExplainParameter to SWAT action dictionary
     """
-
-    parameter: ExplainParameter
-    transformer: ShapleyValuesTransformer
-    batch_executor: BatchOperationExecutor
-    mapper: SwatExplainParameterMapper
 
     def __init__(
         self,
@@ -66,20 +67,51 @@ class BatchExplainProcessor(BaseBatchProcessor[dict[str, str]]):
         *,
         id_column: str = "id",
     ) -> None:
-        """Initialize BatchExplainProcessor with dependencies.
+        """Initialize BatchExplainProcessor with Final dependencies.
 
         Args:
             parameter: ExplainParameter with model and feature configuration
             operation: OperationProtocol for call_action and upload_data
             id_column: Column name for ID in results (default: "id")
         """
-        object.__setattr__(self, "parameter", parameter)
-        object.__setattr__(self, "operation", operation)
+        object.__setattr__(self, "_parameter", parameter)
+        object.__setattr__(self, "_operation", operation)
         object.__setattr__(
-            self, "transformer", ShapleyValuesTransformer(id_column=id_column)
+            self, "_transformer", ShapleyValuesTransformer(id_column=id_column)
         )
-        object.__setattr__(self, "batch_executor", BatchOperationExecutor(operation))
-        object.__setattr__(self, "mapper", SwatExplainParameterMapper())
+        object.__setattr__(self, "_batch_executor", BatchOperationExecutor(operation))
+        object.__setattr__(self, "_mapper", SwatExplainParameterMapper())
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Prevent attribute modification after initialization (immutable)."""
+        raise AttributeError(
+            f"Cannot modify {self.__class__.__name__}.{name} - instance is immutable"
+        )
+
+    @property
+    def parameter(self) -> ExplainParameter:
+        """Access parameter (read-only)."""
+        return object.__getattribute__(self, "_parameter")
+
+    @property
+    def operation(self) -> OperationProtocol[DataFrame | SASDataFrame, CASTable]:
+        """Access operation (read-only)."""
+        return object.__getattribute__(self, "_operation")
+
+    @property
+    def transformer(self) -> ShapleyValuesTransformer:
+        """Access transformer (read-only)."""
+        return object.__getattribute__(self, "_transformer")
+
+    @property
+    def batch_executor(self) -> BatchOperationExecutor:
+        """Access batch executor (read-only)."""
+        return object.__getattribute__(self, "_batch_executor")
+
+    @property
+    def mapper(self) -> SwatExplainParameterMapper:
+        """Access mapper (read-only)."""
+        return object.__getattribute__(self, "_mapper")
 
     @override
     def process_batch(
@@ -149,7 +181,7 @@ class BatchExplainProcessor(BaseBatchProcessor[dict[str, str]]):
                 # Reference: #sym:concat in swat/cas/table.py
                 from swat.cas.table import concat
 
-                concat(
+                final_castable = concat(
                     cas_tables,
                     casout={
                         "name": output_table,
