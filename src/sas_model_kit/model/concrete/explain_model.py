@@ -71,6 +71,10 @@ class ExplainModel(SyncModel[ExplainParameter, ExplainPayload]):
         ...     shapley_values = result.unwrap().data.shapley_values
     """
 
+    __slots__ = ("_executor",)
+
+    _executor: Final[ModelExecutor[ExplainParameter, ExplainPayload]]
+
     def __init__(
         self,
         executor: ModelExecutor[ExplainParameter, ExplainPayload],
@@ -84,18 +88,12 @@ class ExplainModel(SyncModel[ExplainParameter, ExplainPayload]):
             >>> executor = SwatExplainExecutor()
             >>> model = ExplainModel(executor=executor)
         """
-        object.__setattr__(self, "_executor", executor)
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        """Prevent attribute modification after initialization (immutable)."""
-        raise AttributeError(
-            f"Cannot modify {self.__class__.__name__}.{name} - instance is immutable"
-        )
+        self._executor = executor
 
     @property
     def executor(self) -> ModelExecutor[ExplainParameter, ExplainPayload]:
         """Access the executor (read-only)."""
-        return object.__getattribute__(self, "_executor")
+        return self._executor
 
     @override
     def execute(

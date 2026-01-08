@@ -60,6 +60,20 @@ class BatchExplainProcessor(BaseBatchProcessor[dict[str, str]]):
         mapper: Maps ExplainParameter to SWAT action dictionary
     """
 
+    __slots__ = (
+        "_parameter",
+        "_operation",
+        "_transformer",
+        "_batch_executor",
+        "_mapper",
+    )
+
+    _parameter: Final[ExplainParameter]
+    _operation: Final[OperationProtocol[DataFrame | SASDataFrame, CASTable]]
+    _transformer: Final[ShapleyValuesTransformer]
+    _batch_executor: Final[BatchOperationExecutor]
+    _mapper: Final[SwatExplainParameterMapper]
+
     def __init__(
         self,
         parameter: ExplainParameter,
@@ -74,44 +88,31 @@ class BatchExplainProcessor(BaseBatchProcessor[dict[str, str]]):
             operation: OperationProtocol for call_action and upload_data
             id_column: Column name for ID in results (default: "id")
         """
-        object.__setattr__(self, "_parameter", parameter)
-        object.__setattr__(self, "_operation", operation)
-        object.__setattr__(
-            self, "_transformer", ShapleyValuesTransformer(id_column=id_column)
-        )
-        object.__setattr__(self, "_batch_executor", BatchOperationExecutor(operation))
-        object.__setattr__(self, "_mapper", SwatExplainParameterMapper())
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        """Prevent attribute modification after initialization (immutable)."""
-        raise AttributeError(
-            f"Cannot modify {self.__class__.__name__}.{name} - instance is immutable"
-        )
+        self._parameter = parameter
+        self._operation = operation
+        self._transformer = ShapleyValuesTransformer(id_column=id_column)
+        self._batch_executor = BatchOperationExecutor(operation)
+        self._mapper = SwatExplainParameterMapper()
 
     @property
     def parameter(self) -> ExplainParameter:
         """Access parameter (read-only)."""
-        return object.__getattribute__(self, "_parameter")
-
-    @property
-    def operation(self) -> OperationProtocol[DataFrame | SASDataFrame, CASTable]:
-        """Access operation (read-only)."""
-        return object.__getattribute__(self, "_operation")
+        return self._parameter
 
     @property
     def transformer(self) -> ShapleyValuesTransformer:
         """Access transformer (read-only)."""
-        return object.__getattribute__(self, "_transformer")
+        return self._transformer
 
     @property
     def batch_executor(self) -> BatchOperationExecutor:
         """Access batch executor (read-only)."""
-        return object.__getattribute__(self, "_batch_executor")
+        return self._batch_executor
 
     @property
     def mapper(self) -> SwatExplainParameterMapper:
         """Access mapper (read-only)."""
-        return object.__getattribute__(self, "_mapper")
+        return self._mapper
 
     @override
     def process_batch(

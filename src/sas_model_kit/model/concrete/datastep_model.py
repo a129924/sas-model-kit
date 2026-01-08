@@ -62,6 +62,10 @@ class DataStepModel(SyncModel[DataStepParameter, DataStepPayload]):
         ...         print(f"Output: {payload.output_caslib}.{payload.output_table}")
     """
 
+    __slots__ = ("_executor",)
+
+    _executor: Final[ModelExecutor[DataStepParameter, DataStepPayload]]
+
     def __init__(
         self,
         executor: ModelExecutor[DataStepParameter, DataStepPayload],
@@ -75,18 +79,12 @@ class DataStepModel(SyncModel[DataStepParameter, DataStepPayload]):
             >>> executor = SwatDataStepExecutor()
             >>> model = DataStepModel(executor=executor)
         """
-        object.__setattr__(self, "_executor", executor)
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        """Prevent attribute modification after initialization (immutable)."""
-        raise AttributeError(
-            f"Cannot modify {self.__class__.__name__}.{name} - instance is immutable"
-        )
+        self._executor = executor
 
     @property
     def executor(self) -> ModelExecutor[DataStepParameter, DataStepPayload]:
         """Access the executor (read-only)."""
-        return object.__getattribute__(self, "_executor")
+        return self._executor
 
     @override
     def execute(

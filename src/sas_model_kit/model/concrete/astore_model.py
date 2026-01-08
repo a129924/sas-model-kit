@@ -62,6 +62,10 @@ class AstoreModel(SyncModel[AstoreParameter, AstorePayload]):
         ...     print(f"Output: {payload.output_caslib}.{payload.output_table}")
     """
 
+    __slots__ = ("_executor",)
+
+    _executor: Final[ModelExecutor[AstoreParameter, AstorePayload]]
+
     def __init__(
         self,
         executor: ModelExecutor[AstoreParameter, AstorePayload],
@@ -75,18 +79,12 @@ class AstoreModel(SyncModel[AstoreParameter, AstorePayload]):
             >>> executor = SwatAstoreExecutor()
             >>> model = AstoreModel(executor=executor)
         """
-        object.__setattr__(self, "_executor", executor)
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        """Prevent attribute modification after initialization (immutable)."""
-        raise AttributeError(
-            f"Cannot modify {self.__class__.__name__}.{name} - instance is immutable"
-        )
+        self._executor = executor
 
     @property
     def executor(self) -> ModelExecutor[AstoreParameter, AstorePayload]:
         """Access the executor (read-only)."""
-        return object.__getattribute__(self, "_executor")
+        return self._executor
 
     @override
     def execute(
