@@ -265,4 +265,3 @@ class BatchExplainProcessor(BaseBatchProcessor[dict[str, str]]):
     def _generate_batch_id() -> str:
         """Generate unique batch ID for temporary tables."""
         return f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        return f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
