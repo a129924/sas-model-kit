@@ -9,18 +9,23 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar, Union
-
-from swat import CASTable
+from typing import Any, Final, Generic, TypeVar
 
 from sas_model_kit.operation import OperationProtocol
 from sas_model_kit.result import Err, Ok, Result
 
-T = TypeVar("T")
+ExecutionItemType = TypeVar("ExecutionItemType")  # Generic execution result type
+ResourceT = TypeVar("ResourceT")  # Operation input type (DataFrame, SASDataFrame, etc.)
+UploadReturnT = TypeVar(
+    "UploadReturnT"
+)  # Operation.upload_data() return type (CASTable, etc.)
+BatchReturnT = TypeVar(
+    "BatchReturnT"
+)  # process_batch() return type (dict[str, str], etc.)
 
 
 @dataclass(frozen=True)
-class ProcessorError:
+class ProcessorError(Generic[BatchReturnT]):
     """Represents an error occurred during batch processing.
 
     Attributes:
@@ -48,20 +53,20 @@ class ProcessorError:
     message: str
     errors: list[dict[str, Any]] | None = None
     cause: Exception | None = None
-    partial_output: dict[str, str] | None = None
+    partial_output: BatchReturnT | None = None
 
 
 @dataclass(frozen=True)
-class ExecutionSuccess:
+class ExecutionSuccess(Generic[ExecutionItemType]):
     """Successful execution result (CSRP: immutable data carrier).
 
     Attributes:
         id: The ID processed
-        cas_table: CASTable reference from successful upload
+        data: Execution result data (e.g., CASTable for SWAT, str for path, etc.)
     """
 
     id: str | int
-    cas_table: CASTable
+    data: ExecutionItemType
 
 
 @dataclass(frozen=True)
@@ -78,32 +83,38 @@ class ExecutionError:
 
 
 # Union type for execution results
-ExecutionItem = ExecutionSuccess | ExecutionError
+# Note: In concrete implementations (e.g., SWAT), ExecutionItemType will be CASTable
+ExecutionItem = ExecutionSuccess[ExecutionItemType] | ExecutionError
 
 
-ProcessorResult = Result[T, ProcessorError]
+ProcessorResult = Result[BatchReturnT, ProcessorError]
 
 
-class BaseBatchProcessor(ABC, Generic[T]):
+class BaseBatchProcessor(ABC, Generic[ResourceT, UploadReturnT, BatchReturnT]):
     """Abstract base class for batch processors (CSRP).
+
+    Generic parameters:
+        ResourceT: Operation input type (e.g., DataFrame, SASDataFrame)
+        UploadReturnT: Operation.upload_data() return type (e.g., CASTable)
+        BatchReturnT: process_batch() return type (e.g., dict[str, str])
 
     Responsibilities (CSRP):
     - Define a single abstract method for processing a batch
     - Provide helper methods for success/error wrapping
     """
 
-    operation: OperationProtocol
+    operation: OperationProtocol[ResourceT, UploadReturnT]
 
-    def __init__(self, operation: OperationProtocol) -> None:
-        self.operation = operation
+    def __init__(self, operation: OperationProtocol[ResourceT, UploadReturnT]) -> None:
+        self.operation: Final[OperationProtocol[ResourceT, UploadReturnT]] = operation
 
     @abstractmethod
-    def process_batch(self, *args: Any, **kwargs: Any) -> ProcessorResult[T]:
+    def process_batch(self, *args: Any, **kwargs: Any) -> ProcessorResult[BatchReturnT]:
         """Process a batch of inputs and return a domain result."""
         ...
 
     # Utilities
-    def _ok(self, value: T) -> ProcessorResult[T]:
+    def _ok(self, value: BatchReturnT) -> ProcessorResult[BatchReturnT]:
         return Ok(value)
 
     def _err(
@@ -112,8 +123,8 @@ class BaseBatchProcessor(ABC, Generic[T]):
         *,
         errors: list[dict[str, Any]] | None = None,
         cause: Exception | None = None,
-        partial_output: Any | None = None,
-    ) -> ProcessorResult[T]:
+        partial_output: BatchReturnT | None = None,
+    ) -> ProcessorResult[BatchReturnT]:
         return Err(
             ProcessorError(
                 message=message,

@@ -11,31 +11,42 @@ Responsibilities (CSRP):
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Sequence
+from typing import Generic, Protocol, TypeVar
 
-from swat.dataframe import SASDataFrame
-
+from sas_model_kit.datasource.base import DataSourceProtocol
 from sas_model_kit.operation import OperationProtocol
 
 
-class BatchOperationExecutor:
+class TableT(Protocol):
+    caslib: str
+    name: str
+
+
+DataFrameT = TypeVar(
+    "DataFrameT"
+)  # Operation input type (DataFrame, SASDataFrame, etc.)
+ReturnT = TypeVar("ReturnT")  # Generic return type for operations
+
+
+class BatchOperationExecutor(Generic[DataFrameT, ReturnT]):
     """Executor for common batch operations over OperationProtocol."""
 
-    def __init__(self, operation: OperationProtocol[SASDataFrame]) -> None:
+    def __init__(self, operation: OperationProtocol[DataFrameT, ReturnT]) -> None:
         self.operation = operation
 
-    def upload_dataframe(self, df: SASDataFrame, *, caslib: str, table: str) -> None:
+    def upload_dataframe(self, datasource: DataSourceProtocol[DataFrameT]) -> None:
         """Upload a SASDataFrame to CAS."""
-        self.operation.upload_data(df, caslib=caslib, table=table)
+        return datasource.prepare(self.operation)
 
     def concat_tables(
         self,
-        inputs: list[dict[str, str]],
+        inputs: Sequence[TableT],
         *,
         caslib: str,
         output_table: str,
         replace: bool = True,
-    ) -> Any:
+    ) -> TableT:
         """Concatenate input tables into a single output table."""
         return self.operation.call_action(
             "table.concat",
@@ -43,9 +54,7 @@ class BatchOperationExecutor:
             inputs=inputs,
         )
 
-    def cleanup_tables(self, temp_tables: list[tuple[str, str]]) -> None:
+    def cleanup_tables(self, temp_tables: Sequence[TableT]) -> None:
         """Drop temporary tables created during batch processing."""
-        for caslib, name in temp_tables:
-            self.operation.call_action(
-                "table.dropTable", name=name, caslib=caslib, quiet=True
-            )
+        for temp_table in temp_tables:
+            self.operation.drop_table(caslib=temp_table.caslib, table=temp_table.name)

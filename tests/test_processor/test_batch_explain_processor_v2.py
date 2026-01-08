@@ -36,8 +36,7 @@ def _make_param() -> ExplainParameter:
 class TestBatchExplainProcessorExecutionResult:
     """Test ExecutionSuccess and ExecutionError dataclass usage."""
 
-    @patch("swat.cas.table.concat")
-    def test_successful_batch_with_cas_table_return(self, mock_concat: Mock) -> None:
+    def test_successful_batch_with_cas_table_return(self) -> None:
         """Test successful batch with upload_data returning CASTable."""
         operation = Mock(spec=OperationProtocol)
 
@@ -48,14 +47,21 @@ class TestBatchExplainProcessorExecutionResult:
         # Mock upload_data to return CASTable (new behavior!)
         def make_cas_table(df: Any, caslib: str, table: str) -> CASTable:
             mock_table = Mock(spec=CASTable)
-            mock_table.params = {"name": table}
+            mock_table.caslib = caslib
+            mock_table.name = table
             return mock_table
 
         operation.upload_data.side_effect = make_cas_table
 
+        # Mock concat_tables to return final CASTable
+        mock_final_table = Mock(spec=CASTable)
+        mock_final_table.caslib = "public"
+        mock_final_table.name = "results"
+
         processor = BatchExplainProcessor(
             parameter=_make_param(), operation=operation, id_column="customer_id"
         )
+        processor.batch_executor.concat_tables = Mock(return_value=mock_final_table)
 
         result = processor.process_batch(
             ids=["1", "2"],
@@ -67,15 +73,14 @@ class TestBatchExplainProcessorExecutionResult:
 
         # Verify success
         assert result.is_ok
-        final_ref = result.unwrap()
-        assert final_ref["name"] == "results"
-        assert final_ref["caslib"] == "public"
+        final_table = result.unwrap()
+        assert final_table.name == "results"
+        assert final_table.caslib == "public"
 
         # Verify upload_data called twice (returns CASTable, not None)
         assert operation.upload_data.call_count == 2
 
-    @patch("swat.cas.table.concat")
-    def test_partial_success_with_execution_error(self, mock_concat: Mock) -> None:
+    def test_partial_success_with_execution_error(self) -> None:
         """Test partial success: 1 success + 1 ExecutionError."""
         operation = Mock(spec=OperationProtocol)
 
@@ -88,12 +93,19 @@ class TestBatchExplainProcessorExecutionResult:
 
         # upload_data returns CASTable for first only
         mock_table = Mock(spec=CASTable)
-        mock_table.params = {"name": "batch_123_customer_id_1"}
+        mock_table.caslib = "public"
+        mock_table.name = "batch_123_customer_id_1"
         operation.upload_data.return_value = mock_table
+
+        # Mock concat_tables to return final CASTable
+        mock_final_table = Mock(spec=CASTable)
+        mock_final_table.caslib = "public"
+        mock_final_table.name = "results"
 
         processor = BatchExplainProcessor(
             parameter=_make_param(), operation=operation, id_column="customer_id"
         )
+        processor.batch_executor.concat_tables = Mock(return_value=mock_final_table)
 
         result = processor.process_batch(
             ids=["1", "2"],
@@ -138,12 +150,13 @@ class TestBatchExplainProcessorExecutionResult:
         assert len(err.errors) == 2
 
     def test_empty_ids_returns_ok(self) -> None:
-        """Test empty ID list returns Ok."""
+        """Test empty ID list returns Err (no results)."""
         operation = Mock(spec=OperationProtocol)
 
         processor = BatchExplainProcessor(
             parameter=_make_param(), operation=operation, id_column="customer_id"
         )
+        processor.batch_executor.concat_tables = Mock(return_value=None)
 
         result = processor.process_batch(
             ids=[],
@@ -152,13 +165,12 @@ class TestBatchExplainProcessorExecutionResult:
             output_table="results",
         )
 
-        # Empty list should succeed
-        assert result.is_ok
+        # Empty list should return error (no results generated)
+        assert result.is_err
         # But call_action should not be called
         operation.call_action.assert_not_called()
 
-    @patch("swat.cas.table.concat")
-    def test_string_vs_numeric_id_formatting(self, mock_concat: Mock) -> None:
+    def test_string_vs_numeric_id_formatting(self) -> None:
         """Test WHERE clause formatting for string vs numeric IDs."""
         operation = Mock(spec=OperationProtocol)
 
@@ -166,12 +178,19 @@ class TestBatchExplainProcessorExecutionResult:
         operation.call_action.return_value = {"ShapleyValues": shapley_df}
 
         mock_table = Mock(spec=CASTable)
-        mock_table.params = {"name": "temp_table"}
+        mock_table.caslib = "public"
+        mock_table.name = "temp_table"
         operation.upload_data.return_value = mock_table
+
+        # Mock concat_tables to return final CASTable
+        mock_final_table = Mock(spec=CASTable)
+        mock_final_table.caslib = "public"
+        mock_final_table.name = "results"
 
         processor = BatchExplainProcessor(
             parameter=_make_param(), operation=operation, id_column="id"
         )
+        processor.batch_executor.concat_tables = Mock(return_value=mock_final_table)
 
         result = processor.process_batch(
             ids=["str_id", 123],
