@@ -2,12 +2,16 @@
 
 This module provides the DataStepModel for executing custom SAS DATA step
 code for preprocessing or data transformation tasks.
+
+Architecture (CSRP):
+    - Concrete class (not dataclass) implementing SyncModel protocol
+    - Final executor: injected via __init__, cannot be changed
+    - @override decorators on all SyncModel implementations
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 from typing_extensions import override
 
@@ -26,12 +30,16 @@ from sas_model_kit.result import (
 )
 
 
-@dataclass(frozen=True)
 class DataStepModel(SyncModel[DataStepParameter, DataStepPayload]):
     """DATA step execution model.
 
     Executes custom SAS DATA step code via datastep.runCode action.
     Useful for preprocessing, data transformation, or custom logic.
+
+    Design (CSRP):
+        - Concrete class (not dataclass)
+        - Final executor: dependency injection via __init__
+        - All methods explicitly override SyncModel abstract methods
 
     ⚠️ Single execution:
         - Runs complete DATA step code once
@@ -39,7 +47,8 @@ class DataStepModel(SyncModel[DataStepParameter, DataStepPayload]):
         - Output can feed into downstream models (Astore, Explain)
 
     Attributes:
-        executor: ModelExecutor for DataStep operations
+        executor: ModelExecutor[DataStepParameter, DataStepPayload] (Final)
+                 Cannot be changed after initialization
 
     Examples:
         >>> from sas_model_kit.model.executor import SwatDataStepExecutor
@@ -53,7 +62,31 @@ class DataStepModel(SyncModel[DataStepParameter, DataStepPayload]):
         ...         print(f"Output: {payload.output_caslib}.{payload.output_table}")
     """
 
-    executor: ModelExecutor[DataStepParameter, DataStepPayload]
+    def __init__(
+        self,
+        executor: ModelExecutor[DataStepParameter, DataStepPayload],
+    ) -> None:
+        """Initialize DataStepModel with executor dependency.
+
+        Args:
+            executor: ModelExecutor for DataStep operations (Final)
+
+        Examples:
+            >>> executor = SwatDataStepExecutor()
+            >>> model = DataStepModel(executor=executor)
+        """
+        object.__setattr__(self, "_executor", executor)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Prevent attribute modification after initialization (immutable)."""
+        raise AttributeError(
+            f"Cannot modify {self.__class__.__name__}.{name} - instance is immutable"
+        )
+
+    @property
+    def executor(self) -> ModelExecutor[DataStepParameter, DataStepPayload]:
+        """Access the executor (read-only)."""
+        return object.__getattribute__(self, "_executor")
 
     @override
     def execute(
