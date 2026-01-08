@@ -61,6 +61,11 @@ class BatchExplainProcessor(
         - concat receives list[CASTable]
         - Streaming Append: single-pass efficiency (faster than list comprehension)
 
+    DataSource integration:
+        - See docs/examples/batch_with_datasource.py for Phase 1 pattern
+        - DataSourceProtocol can be used to prepare data and fetch results
+        - Phase 2 (future): process_batch_with_datasource() method
+
     Attributes (Final):
         parameter: ExplainParameter with model and feature configuration
         transformer: Converts Shapley SASDataFrame to wide format + ID

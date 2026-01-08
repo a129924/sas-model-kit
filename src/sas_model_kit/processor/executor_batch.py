@@ -81,4 +81,4 @@ class BatchOperationExecutor(Generic[DataFrameT, ReturnT]):
             temp_tables: List of table references to drop (same type as operation returns)
         """
         for temp_table in temp_tables:
-            self.operation.drop_table(caslib=temp_table.caslib, table=temp_table.name)
+            self.operation.drop_table(caslib=temp_table.caslib, table=temp_table.name)  # type: ignore
