@@ -7,12 +7,16 @@ explanations on a single observation.
     - SWAT's explainModel.shapleyExplainer WHERE clause handles ONE row only
     - For batch processing, use BatchExplainProcessor
     - Application layer loops over IDs: for id in ids: model.execute(...)
+
+Architecture (CSRP - Concrete Single Responsibility Principle):
+    - Concrete class (not dataclass) implementing SyncModel protocol
+    - Final executor: injected via __init__, cannot be changed
+    - @override decorators on all SyncModel implementations
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 from typing_extensions import override
 
@@ -31,12 +35,16 @@ from sas_model_kit.result import (
 )
 
 
-@dataclass(frozen=True)
 class ExplainModel(SyncModel[ExplainParameter, ExplainPayload]):
     """Single-row explainability model using Shapley values.
 
     Executes explainModel.shapleyExplainer for ONE observation at a time.
     Wraps Executor execution with Result[ModelSuccess, ModelError].
+
+    Design (CSRP):
+        - Concrete class (not dataclass)
+        - Final executor: dependency injection via __init__
+        - All methods explicitly override SyncModel abstract methods
 
     ⚠️ Important:
         - This is SINGLE-ROW execution
@@ -45,7 +53,8 @@ class ExplainModel(SyncModel[ExplainParameter, ExplainPayload]):
         - For batch: use BatchExplainProcessor
 
     Attributes:
-        executor: ModelExecutor for Explain operations
+        executor: ModelExecutor[ExplainParameter, ExplainPayload] (Final)
+                 Cannot be changed after initialization
 
     Examples:
         >>> from sas_model_kit.model.executor import SwatExplainExecutor
@@ -62,7 +71,31 @@ class ExplainModel(SyncModel[ExplainParameter, ExplainPayload]):
         ...     shapley_values = result.unwrap().data.shapley_values
     """
 
-    executor: ModelExecutor[ExplainParameter, ExplainPayload]
+    def __init__(
+        self,
+        executor: ModelExecutor[ExplainParameter, ExplainPayload],
+    ) -> None:
+        """Initialize ExplainModel with executor dependency.
+
+        Args:
+            executor: ModelExecutor for Explain operations (Final)
+
+        Examples:
+            >>> executor = SwatExplainExecutor()
+            >>> model = ExplainModel(executor=executor)
+        """
+        object.__setattr__(self, "_executor", executor)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Prevent attribute modification after initialization (immutable)."""
+        raise AttributeError(
+            f"Cannot modify {self.__class__.__name__}.{name} - instance is immutable"
+        )
+
+    @property
+    def executor(self) -> ModelExecutor[ExplainParameter, ExplainPayload]:
+        """Access the executor (read-only)."""
+        return object.__getattribute__(self, "_executor")
 
     @override
     def execute(
