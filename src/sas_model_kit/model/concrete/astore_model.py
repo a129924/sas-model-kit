@@ -2,12 +2,16 @@
 
 This module provides the AstoreModel for executing ASTORE binary model
 scoring operations.
+
+Architecture (CSRP):
+    - Concrete class (not dataclass) implementing SyncModel protocol
+    - Final executor: injected via __init__, cannot be changed
+    - @override decorators on all SyncModel implementations
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 from typing_extensions import override
 
@@ -26,12 +30,16 @@ from sas_model_kit.result import (
 )
 
 
-@dataclass(frozen=True)
 class AstoreModel(SyncModel[AstoreParameter, AstorePayload]):
     """ASTORE model for binary model scoring.
 
     Executes astore.score action to score input data using a pre-compiled
     ASTORE binary model. Returns output location and row count.
+
+    Design (CSRP):
+        - Concrete class (not dataclass)
+        - Final executor: dependency injection via __init__
+        - All methods explicitly override SyncModel abstract methods
 
     ⚠️ Single execution:
         - Scores all rows in input table
@@ -39,7 +47,8 @@ class AstoreModel(SyncModel[AstoreParameter, AstorePayload]):
         - For preprocessing workflows: output can feed into ExplainModel
 
     Attributes:
-        executor: ModelExecutor for Astore operations
+        executor: ModelExecutor[AstoreParameter, AstorePayload] (Final)
+                 Cannot be changed after initialization
 
     Examples:
         >>> from sas_model_kit.model.executor import SwatAstoreExecutor
@@ -53,7 +62,31 @@ class AstoreModel(SyncModel[AstoreParameter, AstorePayload]):
         ...     print(f"Output: {payload.output_caslib}.{payload.output_table}")
     """
 
-    executor: ModelExecutor[AstoreParameter, AstorePayload]
+    def __init__(
+        self,
+        executor: ModelExecutor[AstoreParameter, AstorePayload],
+    ) -> None:
+        """Initialize AstoreModel with executor dependency.
+
+        Args:
+            executor: ModelExecutor for ASTORE operations (Final)
+
+        Examples:
+            >>> executor = SwatAstoreExecutor()
+            >>> model = AstoreModel(executor=executor)
+        """
+        object.__setattr__(self, "_executor", executor)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Prevent attribute modification after initialization (immutable)."""
+        raise AttributeError(
+            f"Cannot modify {self.__class__.__name__}.{name} - instance is immutable"
+        )
+
+    @property
+    def executor(self) -> ModelExecutor[AstoreParameter, AstorePayload]:
+        """Access the executor (read-only)."""
+        return object.__getattribute__(self, "_executor")
 
     @override
     def execute(
