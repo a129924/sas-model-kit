@@ -14,11 +14,12 @@ from abc import ABC, abstractmethod
 from typing import Any, Final, Generic, Protocol, TypeVar
 
 ReSourceType = TypeVar("ReSourceType", contravariant=True)
+ReturnType = TypeVar("ReturnType", covariant=True)
 LibraryConnectionT = TypeVar("LibraryConnectionT", covariant=True)
 
 
 class OperationProtocol(
-    Protocol[ReSourceType],
+    Protocol[ReSourceType, ReturnType],
 ):
     """
     Protocol for operation implementations.
@@ -70,7 +71,7 @@ class OperationProtocol(
         """
         ...
 
-    def upload_data(self, data: ReSourceType, caslib: str, table: str) -> None:
+    def upload_data(self, data: ReSourceType, caslib: str, table: str) -> ReturnType:
         """
         Upload data to server.
 
@@ -79,6 +80,9 @@ class OperationProtocol(
             caslib: Target CAS library
             table: Target table name
 
+        Returns:
+            ReturnType: Implementation-specific return value (e.g., CASTable for SWAT)
+
         Raises:
             ExecutionError: If upload fails
             ValueError: If data format is unsupported
@@ -86,7 +90,7 @@ class OperationProtocol(
         Example:
             >>> import pandas as pd
             >>> df = pd.DataFrame({'a': [1, 2], 'b': [3, 4]})
-            >>> operation.upload_data(df, caslib='public', table='my_data')
+            >>> cas_table = operation.upload_data(df, caslib='public', table='my_data')
         """
         ...
 
@@ -126,10 +130,12 @@ class OperationProtocol(
 
 
 class BaseOperation(
-    ABC, OperationProtocol[ReSourceType], Generic[LibraryConnectionT, ReSourceType]
+    ABC,
+    OperationProtocol[ReSourceType, ReturnType],
+    Generic[LibraryConnectionT, ReSourceType, ReturnType],
 ):
     """
-    Abstract base class for operation implementations.
+    Abstract base class for operation implementations (CSRP).
 
     This class provides a skeletal implementation of the OperationProtocol
     to minimize the effort required to implement this interface.
@@ -184,7 +190,9 @@ class BaseOperation(
     @abstractmethod
     def call_action(self, action_name: str, **kwargs: Any) -> Any: ...
     @abstractmethod
-    def upload_data(self, data: ReSourceType, caslib: str, table: str) -> None: ...
+    def upload_data(
+        self, data: ReSourceType, caslib: str, table: str
+    ) -> ReturnType: ...
     @abstractmethod
     def table_exists(self, caslib: str, table: str) -> bool: ...
     @abstractmethod

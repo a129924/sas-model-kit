@@ -5,9 +5,10 @@ and persists aggregated results as CAS tables.
 
 Design:
     - Direct call_action (no ExplainModel dependency)
-    - Generator-based: yields CASTable per ID
-    - No intermediate list[dict] conversion (SASDataFrame → transform → upload)
-    - Memory-efficient streaming
+    - Generator-based: yields ExecutionSuccess or ExecutionError per ID
+    - SASDataFrame → transform → upload → CASTable pipeline
+    - Memory-efficient streaming (single-pass)
+    - SWAT Bounded Context integration
 """
 
 from __future__ import annotations
@@ -23,39 +24,62 @@ from typing_extensions import override
 
 from sas_model_kit.operation import OperationProtocol
 from sas_model_kit.parameter import ExplainParameter
-from sas_model_kit.processor.base import BaseBatchProcessor, ProcessorResult
+from sas_model_kit.processor.base import (
+    BaseBatchProcessor,
+    ExecutionError,
+    ExecutionItem,
+    ExecutionSuccess,
+    ProcessorResult,
+)
 from sas_model_kit.processor.executor_batch import BatchOperationExecutor
+from sas_model_kit.processor.swat.mappers import SwatExplainParameterMapper
 from sas_model_kit.transformer.shapley_values import ShapleyValuesTransformer
 
 
 @dataclass(frozen=True)
-class BatchExplainProcessor(BaseBatchProcessor["Any"]):
+class BatchExplainProcessor(BaseBatchProcessor[dict[str, str]]):
     """Batch processor for Explain executions (CSRP).
 
     Direct call_action approach:
         - No ExplainModel dependency
         - call_action → SASDataFrame → transform → upload_frame → CASTable
-        - Generator yields CASTable
+        - Generator yields ExecutionSuccess or ExecutionError
         - concat receives list[CASTable]
+        - Streaming Append: single-pass efficiency (faster than list comprehension)
+
+    Attributes:
+        parameter: ExplainParameter with model and feature configuration
+        transformer: Converts Shapley SASDataFrame to wide format + ID
+        batch_executor: Handles upload/concat/cleanup operations
+        mapper: Maps ExplainParameter to SWAT action dictionary
     """
 
     parameter: ExplainParameter
     transformer: ShapleyValuesTransformer
     batch_executor: BatchOperationExecutor
+    mapper: SwatExplainParameterMapper
 
     def __init__(
         self,
         parameter: ExplainParameter,
-        operation: OperationProtocol[DataFrame | SASDataFrame],
+        operation: OperationProtocol[DataFrame | SASDataFrame, CASTable],
         *,
         id_column: str = "id",
     ) -> None:
+        """Initialize BatchExplainProcessor with dependencies.
+
+        Args:
+            parameter: ExplainParameter with model and feature configuration
+            operation: OperationProtocol for call_action and upload_data
+            id_column: Column name for ID in results (default: "id")
+        """
         object.__setattr__(self, "parameter", parameter)
         object.__setattr__(self, "operation", operation)
         object.__setattr__(
             self, "transformer", ShapleyValuesTransformer(id_column=id_column)
         )
         object.__setattr__(self, "batch_executor", BatchOperationExecutor(operation))
+        object.__setattr__(self, "mapper", SwatExplainParameterMapper())
 
     @override
     def process_batch(
@@ -67,21 +91,42 @@ class BatchExplainProcessor(BaseBatchProcessor["Any"]):
         output_table: str,
         cleanup_temp_tables: bool = True,
         **context: Any,
-    ) -> ProcessorResult[Any]:
+    ) -> ProcessorResult[dict[str, str]]:
         """Process a batch of IDs using direct call_action.
 
         Flow:
             1. Generator: For each ID, call_action → SASDataFrame
-            2. Transform to wide + ID, upload_frame → CASTable
-            3. Yield CASTable
-            4. Concatenate all CASTable into final output
-            5. Cleanup temp tables
+            2. Transform to wide + ID, upload_frame → CASTable (via upload_data return)
+            3. Yield ExecutionSuccess with CASTable
+            4. Streaming Append: Collect cas_tables and errors (single-pass, O(n) time)
+            5. Concatenate all CASTable into final output
+            6. Cleanup temp tables
+
+        Args:
+            ids: List of IDs to process
+            id_column: Column name for ID filtering
+            batch_caslib: CAS library for temporary/output tables
+            output_table: Final output table name
+            cleanup_temp_tables: Whether to cleanup intermediate tables (default: True)
+            **context: Additional execution context
 
         Returns:
             Scheme A semantics:
             - All success: Ok(final_ref)
             - Partial success: Err with partial_output=final_ref
             - All failure: Err with partial_output=None
+
+        Example:
+            >>> processor = BatchExplainProcessor(param, operation)
+            >>> result = processor.process_batch(
+            ...     ids=["id1", "id2", "id3"],
+            ...     id_column="id",
+            ...     batch_caslib="public",
+            ...     output_table="explain_results",
+            ... )
+            >>> if result.is_ok:
+            ...     final_ref = result.unwrap()
+            ...     print(f"Results in {final_ref['name']}")
         """
         cas_tables: list[CASTable] = []
         errors: list[dict[str, Any]] = []
@@ -89,18 +134,19 @@ class BatchExplainProcessor(BaseBatchProcessor["Any"]):
         try:
             batch_prefix = self._generate_batch_id()
 
-            # Generator: yields CASTable per ID
-            for item in self._execute_and_upload_generator(
+            # Streaming Append (single-pass, O(n) - fastest approach)
+            for result in self._execute_and_upload_generator(
                 ids, id_column, batch_prefix, batch_caslib, **context
             ):
-                if item["status"] == "success":
-                    cas_tables.append(item["cas_table"])
-                else:
-                    errors.append({"id": item["id"], "message": item["error"]})
+                if isinstance(result, ExecutionSuccess):
+                    cas_tables.append(result.cas_table)
+                elif isinstance(result, ExecutionError):
+                    errors.append({"id": result.id, "message": result.message})
 
             # Concatenate if any CASTable created
             if cas_tables:
                 # SWAT concat accepts list[CASTable]
+                # Reference: #sym:concat in swat/cas/table.py
                 from swat.cas.table import concat
 
                 concat(
@@ -140,11 +186,29 @@ class BatchExplainProcessor(BaseBatchProcessor["Any"]):
         batch_prefix: str,
         batch_caslib: str,
         **context: Any,
-    ) -> Generator[dict[str, Any], None, None]:
+    ) -> Generator[ExecutionItem, None, None]:
         """Generator: call_action → SASDataFrame → transform → upload_frame → CASTable.
 
         Yields:
-            dict with keys: status ("success"|"error"), id, cas_table (if success), error (if error)
+            ExecutionSuccess(id, cas_table) or ExecutionError(id, message) per iteration
+
+        Memory Efficiency:
+            - No list accumulation (generator)
+            - SASDataFrame handled natively (not converted to list[dict])
+            - CASTable reference held briefly for concat
+            - Single-pass iteration
+
+        Example:
+            >>> for result in self._execute_and_upload_generator(
+            ...     ids=["id1", "id2"],
+            ...     id_column="id",
+            ...     batch_prefix="batch_20260108_120000",
+            ...     batch_caslib="public",
+            ... ):
+            ...     if isinstance(result, ExecutionSuccess):
+            ...         print(f"ID {result.id} succeeded")
+            ...     else:
+            ...         print(f"ID {result.id} failed: {result.message}")
         """
         for id_ in ids:
             try:
@@ -155,26 +219,25 @@ class BatchExplainProcessor(BaseBatchProcessor["Any"]):
                     where_value = f"{id_}"
                 where_clause = f"{id_column}={where_value}"
 
+                # Use mapper to build action dictionary (avoiding hardcoding)
+                action_dict = self.mapper.build_action_dict(
+                    self.parameter,
+                    where=where_clause,
+                    **context,
+                )
+
                 # Direct call_action to explainModel.shapleyExplainer
                 result = self.operation.call_action(
                     "explainModel.shapleyExplainer",
-                    table=self.parameter.train_table,
-                    caslib=self.parameter.train_caslib,
-                    modelTable=self.parameter.model_table,
-                    modelTableType=str(self.parameter.model_table_type),
-                    predictedTarget=self.parameter.predicted_target,
-                    inputs=self.parameter.features,
-                    nominals=[],  # Could be parameterized if needed
-                    where=where_clause,
+                    **action_dict,
                 )
 
                 # Extract SASDataFrame from result['ShapleyValues']
                 if not result or "ShapleyValues" not in result:
-                    yield {
-                        "status": "error",
-                        "id": id_,
-                        "error": "No ShapleyValues in result",
-                    }
+                    yield ExecutionError(
+                        id=id_,
+                        message="No ShapleyValues in result",
+                    )
                     continue
 
                 shapley_df = cast(
@@ -184,29 +247,22 @@ class BatchExplainProcessor(BaseBatchProcessor["Any"]):
                 # Transform: wide + ID (still SASDataFrame)
                 wide_df = self.transformer.transform(shapley_df, id_value=id_)
 
-                # Upload DataFrame and create CASTable reference
+                # Upload DataFrame and get CASTable reference (new feature!)
+                # upload_data now returns CASTable (was None before)
                 table_name = f"{batch_prefix}_{id_column}_{id_}"
-                self.operation.upload_data(
+                cas_table = self.operation.upload_data(
                     wide_df, caslib=batch_caslib, table=table_name
                 )
 
-                # Create CASTable reference (need connection from operation)
-                # For SWAT: operation has _session
-                if hasattr(self.operation, "_session"):
-                    session = self.operation._session  # type: ignore[attr-defined]
-                    cas_table = session.CASTable(name=table_name, caslib=batch_caslib)
-                    yield {"status": "success", "id": id_, "cas_table": cas_table}
-                else:
-                    # Fallback: yield table name for concat
-                    yield {
-                        "status": "error",
-                        "id": id_,
-                        "error": "Cannot create CASTable reference",
-                    }
+                # Type-safe yield with ExecutionSuccess dataclass
+                yield ExecutionSuccess(id=id_, cas_table=cas_table)
 
             except Exception as e:
-                yield {"status": "error", "id": id_, "error": f"Execution failed: {e}"}
+                # Type-safe yield with ExecutionError dataclass
+                yield ExecutionError(id=id_, message=f"Execution failed: {e}")
 
     @staticmethod
     def _generate_batch_id() -> str:
+        """Generate unique batch ID for temporary tables."""
+        return f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         return f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"

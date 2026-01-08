@@ -2,7 +2,7 @@
 
 from unittest.mock import Mock
 
-import pandas as pd
+from swat.dataframe import SASDataFrame
 
 from sas_model_kit.processor.executor_batch import BatchOperationExecutor
 
@@ -10,7 +10,7 @@ from sas_model_kit.processor.executor_batch import BatchOperationExecutor
 def test_upload_dataframe_calls_operation_upload() -> None:
     op = Mock()
     execu = BatchOperationExecutor(op)
-    df = pd.DataFrame({"a": [1], "b": [2]})
+    df = SASDataFrame({"a": [1], "b": [2]})
 
     execu.upload_dataframe(df, caslib="public", table="t1")
 

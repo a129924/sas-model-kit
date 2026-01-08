@@ -21,9 +21,11 @@ class ActionSetName(NamedTuple):
     action: str
 
 
-class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame | swat.SASDataFrame]):
+class SWATOperationAdapter(
+    BaseOperation[swat.CAS, DataFrame | swat.SASDataFrame, swat.CASTable]
+):
     """
-    SWAT-specific operation adapter.
+    SWAT-specific operation adapter (CSRP).
 
     Implements OperationProtocol using SWAT's CAS session API, following CSRP
     (Concrete Single Responsibility Principle).
@@ -39,6 +41,11 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame | swat.SASDataFrame
         Not thread-safe. If using in ThreadPool, create separate adapter
         instances for each thread.
 
+    Generic Types:
+        - swat.CAS: Connection type
+        - DataFrame | swat.SASDataFrame: Input data type (ReSourceType)
+        - swat.CASTable: Return type from upload_data (ReturnType)
+
     Example:
         >>> connection = SWATConnection(...)
         >>> operation = connection.get_operation()
@@ -46,6 +53,8 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame | swat.SASDataFrame
         >>> result = operation.call_action('astore.score', ...)
         >>> # Subsequent calls reuse loaded actionset
         >>> result2 = operation.call_action('astore.score', ...)
+        >>> # upload_data now returns CASTable
+        >>> cas_table = operation.upload_data(df, caslib='public', table='data')
     """
 
     def __init__(self, connection: swat.CAS) -> None:
@@ -189,9 +198,9 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame | swat.SASDataFrame
         data: DataFrame | swat.SASDataFrame,
         caslib: str,
         table: str,
-    ) -> None:
+    ) -> swat.CASTable:
         """
-        Upload data to CAS using SWAT.
+        Upload data to CAS using SWAT and return CASTable reference.
 
         Uses swat.CAS.upload_frame() for DataFrame uploads. Supports pandas
         DataFrames natively via SWAT's conversion.
@@ -201,6 +210,9 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame | swat.SASDataFrame
             caslib: Target CAS library
             table: Target table name
 
+        Returns:
+            swat.CASTable: Reference to uploaded table in CAS
+
         Raises:
             TypeError: If data format is unsupported
             RuntimeError: If upload fails
@@ -208,7 +220,9 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame | swat.SASDataFrame
         Example:
             >>> import pandas as pd
             >>> df = pd.DataFrame({'a': [1, 2], 'b': [3, 4]})
-            >>> adapter.upload_data(df, caslib='public', table='my_data')
+            >>> cas_table = adapter.upload_data(df, caslib='public', table='my_data')
+            >>> print(cas_table.name)
+            'my_data'
         """
         try:
             # SWAT's upload_frame accepts pandas DataFrame
@@ -221,6 +235,9 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame | swat.SASDataFrame
                     "replace": True,  # Always replace for idempotency
                 },
             )
+
+            # Create and return CASTable reference
+            return self._session.CASTable(name=table, caslib=caslib)
 
         except TypeError as e:
             raise TypeError(

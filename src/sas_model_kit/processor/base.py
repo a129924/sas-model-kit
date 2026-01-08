@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, Union
+
+from swat import CASTable
 
 from sas_model_kit.operation import OperationProtocol
 from sas_model_kit.result import Err, Ok, Result
@@ -47,6 +49,36 @@ class ProcessorError:
     errors: list[dict[str, Any]] | None = None
     cause: Exception | None = None
     partial_output: dict[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class ExecutionSuccess:
+    """Successful execution result (CSRP: immutable data carrier).
+
+    Attributes:
+        id: The ID processed
+        cas_table: CASTable reference from successful upload
+    """
+
+    id: str | int
+    cas_table: CASTable
+
+
+@dataclass(frozen=True)
+class ExecutionError:
+    """Failed execution result (CSRP: immutable data carrier).
+
+    Attributes:
+        id: The ID that failed
+        message: Error message
+    """
+
+    id: str | int
+    message: str
+
+
+# Union type for execution results
+ExecutionItem = ExecutionSuccess | ExecutionError
 
 
 ProcessorResult = Result[T, ProcessorError]
