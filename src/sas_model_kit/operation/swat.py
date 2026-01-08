@@ -21,7 +21,7 @@ class ActionSetName(NamedTuple):
     action: str
 
 
-class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame]):
+class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame | swat.SASDataFrame]):
     """
     SWAT-specific operation adapter.
 
@@ -184,7 +184,12 @@ class SWATOperationAdapter(BaseOperation[swat.CAS, DataFrame]):
         self._loaded_actionsets.add(actionset_name)
 
     @override
-    def upload_data(self, data: DataFrame, caslib: str, table: str) -> None:
+    def upload_data(
+        self,
+        data: DataFrame | swat.SASDataFrame,
+        caslib: str,
+        table: str,
+    ) -> None:
         """
         Upload data to CAS using SWAT.
 

@@ -17,6 +17,7 @@ from .exceptions import (
     TransformationError,
 )
 from .protocol import CASTableTransformer
+from .shapley_values import ShapleyValuesTransformer
 from .sort import SortTransformer
 from .unique_key import AddUniqueKeyTransformer
 
@@ -28,4 +29,5 @@ __all__ = [
     "ColumnConflictError",
     "SortTransformer",
     "AddUniqueKeyTransformer",
+    "ShapleyValuesTransformer",
 ]
