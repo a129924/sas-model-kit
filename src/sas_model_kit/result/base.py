@@ -34,6 +34,8 @@ from typing import Generic, TypeVar
 
 T_co = TypeVar("T_co", covariant=True)
 E_co = TypeVar("E_co", covariant=False)
+U = TypeVar("U")
+F = TypeVar("F")
 
 
 class Result(ABC, Generic[T_co, E_co]):
@@ -169,6 +171,152 @@ class Result(ABC, Generic[T_co, E_co]):
         if isinstance(self, Ok):
             return self.value  # type: ignore[attr-defined]
         return fn(self.error)  # type: ignore[attr-defined]
+
+    def and_then(self, fn: Callable[[T_co], Result[U, E_co]]) -> Result[U, E_co]:
+        """Chain multiple Result-returning operations.
+
+        If this is an Ok, applies the function to the contained value and
+        returns the resulting Result. If this is an Err, returns self unchanged.
+
+        This is the monadic bind operation, useful for sequencing fallible
+        computations.
+
+        Args:
+            fn: Function that takes a success value and returns a Result
+
+        Returns:
+            A new Result: the result of fn(value) if Ok, or self if Err
+
+        Examples:
+            >>> def add_one(x: int) -> Result[int, str]:
+            ...     return Ok(x + 1)
+            >>> Ok(42).and_then(add_one)
+            Ok(value=43)
+            >>> Err("error").and_then(add_one)
+            Err(error='error')
+
+            >>> # Chaining multiple operations
+            >>> def divide(x: int) -> Result[int, str]:
+            ...     return Ok(100 // x) if x != 0 else Err("divide by zero")
+            >>> result = Ok(10).and_then(divide).and_then(divide)
+            >>> result.is_ok
+            True
+        """
+        if isinstance(self, Ok):
+            return fn(self.value)  # type: ignore[attr-defined]
+        return self  # type: ignore[return-value]
+
+    def map(self, fn: Callable[[T_co], U]) -> Result[U, E_co]:
+        """Transform the success value with a pure function.
+
+        If this is an Ok, applies the function to the contained value and
+        returns Ok with the result. If this is an Err, returns self unchanged.
+
+        Args:
+            fn: Function that transforms the success value
+
+        Returns:
+            A new Result with transformed value if Ok, or self if Err
+
+        Examples:
+            >>> Ok(42).map(lambda x: x * 2)
+            Ok(value=84)
+            >>> Err("error").map(lambda x: x * 2)
+            Err(error='error')
+
+            >>> # Chaining transformations
+            >>> result = Ok(10).map(lambda x: x * 2).map(str)
+            >>> result.unwrap()
+            '20'
+        """
+        if isinstance(self, Ok):
+            return Ok(fn(self.value))  # type: ignore[attr-defined]
+        return self  # type: ignore[return-value]
+
+    def map_err(self, fn: Callable[[E_co], F]) -> Result[T_co, F]:
+        """Transform the error value with a pure function.
+
+        If this is an Err, applies the function to the contained error and
+        returns Err with the result. If this is an Ok, returns self unchanged.
+
+        Args:
+            fn: Function that transforms the error value
+
+        Returns:
+            A new Result with transformed error if Err, or self if Ok
+
+        Examples:
+            >>> Err(ValueError("invalid")).map_err(str)
+            Err(error='invalid')
+            >>> Ok(42).map_err(str)
+            Ok(value=42)
+
+            >>> # Normalizing error types
+            >>> result = Err(ValueError("test")).map_err(lambda e: {"error": str(e)})
+            >>> result.error
+            {'error': 'test'}
+        """
+        if isinstance(self, Err):
+            return Err(fn(self.error))  # type: ignore[attr-defined]
+        return self  # type: ignore[return-value]
+
+    def or_else(self, fn: Callable[[E_co], Result[T_co, F]]) -> Result[T_co, F]:
+        """Provide an alternative Result if this is an error.
+
+        If this is an Err, applies the function to the contained error and
+        returns the resulting Result. If this is an Ok, returns self unchanged.
+
+        Useful for error recovery and fallback logic.
+
+        Args:
+            fn: Function that takes an error and returns a recovery Result
+
+        Returns:
+            A new Result: self if Ok, or the result of fn(error) if Err
+
+        Examples:
+            >>> def recover(e: str) -> Result[int, str]:
+            ...     return Ok(0) if e == "default_ok" else Err(e)
+            >>> Err("default_ok").or_else(recover)
+            Ok(value=0)
+            >>> Err("fatal").or_else(recover)
+            Err(error='fatal')
+
+            >>> # Chaining error recovery
+            >>> result = (
+            ...     Err("attempt_1")
+            ...     .or_else(lambda _: Err("attempt_2"))
+            ...     .or_else(lambda _: Ok(42))
+            ... )
+            >>> result.unwrap()
+            42
+        """
+        if isinstance(self, Err):
+            return fn(self.error)  # type: ignore[attr-defined]
+        return self  # type: ignore[return-value]
+
+    def unwrap_or_raise(self) -> T_co:
+        """Extract the success value or raise the error.
+
+        Alias for unwrap(). Explicit naming for clarity that an exception
+        will be raised if this is an Err.
+
+        Returns:
+            The success value if Ok
+
+        Raises:
+            Exception: The contained error if Err and error is an Exception
+            RuntimeError: If Err and error is not an Exception
+
+        Examples:
+            >>> Ok(42).unwrap_or_raise()
+            42
+            >>> try:
+            ...     Err(ValueError("test")).unwrap_or_raise()
+            ... except ValueError as e:
+            ...     print(str(e))  # "test"
+        """
+        return self.unwrap()
 
 
 @dataclass(frozen=True)
