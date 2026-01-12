@@ -104,3 +104,6 @@ class DataSourceProtocol(Protocol, Generic[ReSourceT]):
             ... )
         """
         ...
+
+
+DataSourceProtocolT = TypeVar("DataSourceProtocolT", bound=DataSourceProtocol)

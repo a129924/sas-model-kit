@@ -5,11 +5,16 @@ This module implements DataSourceProtocol for pandas DataFrame, providing
 upload/download capabilities for tabular data.
 """
 
+from typing import Any, TypeVar
+
 import pandas as pd
 from typing_extensions import override
 
 from sas_model_kit.datasource.base import DataSourceProtocol
 from sas_model_kit.operation.base import OperationProtocol
+
+# Type variables for generic OperationProtocol support
+OperationReturnType = TypeVar("OperationReturnType")  # Any type the operation returns
 
 
 class DataFrameDataSource(DataSourceProtocol[pd.DataFrame]):
@@ -82,7 +87,7 @@ class DataFrameDataSource(DataSourceProtocol[pd.DataFrame]):
         self._table = table
 
     @override
-    def prepare(self, operation: OperationProtocol[pd.DataFrame]) -> None:
+    def prepare(self, operation: OperationProtocol[pd.DataFrame, Any]) -> None:
         """
         Upload DataFrame to CAS server.
 
@@ -103,7 +108,7 @@ class DataFrameDataSource(DataSourceProtocol[pd.DataFrame]):
 
     @override
     def fetch_result(
-        self, operation: OperationProtocol[pd.DataFrame], caslib: str, table: str
+        self, operation: OperationProtocol[pd.DataFrame, Any], caslib: str, table: str
     ) -> pd.DataFrame:
         """
         Fetch results from CAS as DataFrame.

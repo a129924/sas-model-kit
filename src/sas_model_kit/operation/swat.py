@@ -301,3 +301,29 @@ class SWATOperationAdapter(
         """
         # ASTORE models are CAS tables, so we can reuse table_exists
         return self.table_exists(caslib, table)
+
+    @override
+    def drop_table(self, caslib: str, table: str) -> None:
+        """
+        Drop a table from the specified CAS library.
+
+        Uses SWAT's table.dropTable action to remove the specified table.
+
+        Args:
+            caslib: CAS library name
+            table: Table name to drop
+
+        Returns:
+            None
+
+        Example:
+            >>> adapter.drop_table('public', 'my_data')
+        """
+        try:
+            self._session.table.dropTable(
+                caslib=caslib,
+                name=table,
+                quiet=True,  # Suppress errors if table doesn't exist
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to drop table {caslib}.{table}: {e}") from e

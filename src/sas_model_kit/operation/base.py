@@ -128,6 +128,20 @@ class OperationProtocol(
         """
         ...
 
+    def drop_table(self, caslib: str, table: str) -> None:
+        """
+        Drop a table from the specified CAS library.
+
+        Args:
+            caslib: CAS library name
+            table: Table name to drop
+        Returns:
+            None
+        Example:
+            >>> operation.drop_table('public', 'my_data')
+        """
+        ...
+
 
 class BaseOperation(
     ABC,
@@ -197,3 +211,5 @@ class BaseOperation(
     def table_exists(self, caslib: str, table: str) -> bool: ...
     @abstractmethod
     def model_exists(self, caslib: str, table: str) -> bool: ...
+    @abstractmethod
+    def drop_table(self, caslib: str, table: str) -> None: ...
