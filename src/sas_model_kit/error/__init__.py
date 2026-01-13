@@ -11,7 +11,6 @@ from .parameter import (
 )
 from .transformer import (
     DuplicateKeyError,
-    InvalidColumnFailure,
     SortError,
     TransformationFailure,
 )
@@ -24,7 +23,6 @@ __all__ = [
     "UploadFailure",
     "DataFetchFailure",
     "TransformationFailure",
-    "InvalidColumnFailure",
     "SortError",
     "DuplicateKeyError",
     "ValidationFailure",

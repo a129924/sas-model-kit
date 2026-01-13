@@ -25,7 +25,6 @@ def test_error_exports_available() -> None:
         "UploadFailure",
         "DataFetchFailure",
         "TransformationFailure",
-        "InvalidColumnFailure",
         "SortError",
         "DuplicateKeyError",
         "ValidationFailure",

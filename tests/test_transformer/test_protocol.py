@@ -4,6 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from sas_model_kit.result import Ok
 from sas_model_kit.transformer.protocol import CASTableTransformer
 
 
@@ -32,7 +33,7 @@ def test_transformer_with_execute_implementation() -> None:
 
     class GoodTransformer(CASTableTransformer):
         def execute(self, input_table):
-            return input_table  # Minimal implementation
+            return Ok(input_table)
 
     mock_operation = Mock()
     transformer = GoodTransformer(mock_operation)
@@ -47,7 +48,7 @@ def test_transformer_stores_operation() -> None:
 
     class TestTransformer(CASTableTransformer):
         def execute(self, input_table):
-            return input_table
+            return Ok(input_table)
 
     transformer = TestTransformer(mock_operation)
 
@@ -60,7 +61,7 @@ def test_transformer_execute_signature() -> None:
     class TestTransformer(CASTableTransformer):
         def execute(self, input_table):
             # Use the operation
-            return input_table
+            return Ok(input_table)
 
     import inspect
 

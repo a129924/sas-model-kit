@@ -15,6 +15,8 @@ import pandas as pd
 import pytest
 
 from sas_model_kit.datasource.cas_table import CASTableDataSource
+from sas_model_kit.error import DataFetchFailure, OperationError, UploadFailure
+from sas_model_kit.result import Err, Ok
 
 
 class TestCASTableDataSourceInit:
@@ -64,66 +66,79 @@ class TestCASTableDataSourcePrepare:
         # Arrange
         datasource = CASTableDataSource("public", "existing_data")
 
-        # Mock result indicating table exists
-        mock_result = {"exists": 1}
+        # Mock operation.table_exists to return True
         mock_operation = MagicMock()
-        mock_operation.call_action = MagicMock(return_value=mock_result)
+        mock_operation.table_exists = MagicMock(return_value=Ok(True))
 
-        # Act (should not raise)
-        datasource.prepare(mock_operation)
+        # Act
+        result = datasource.prepare(mock_operation)
 
         # Assert
-        mock_operation.call_action.assert_called_once_with(
-            "table.tableExists", caslib="public", name="existing_data"
-        )
+        mock_operation.table_exists.assert_called_once_with("public", "existing_data")
+        assert result.is_ok
+        assert result.value is None
 
     def test_prepare_with_nonexistent_table(self):
-        """Should raise ValueError when table doesn't exist."""
+        """Should fail when table doesn't exist."""
         # Arrange
         datasource = CASTableDataSource("public", "missing_data")
 
-        # Mock result indicating table doesn't exist
-        mock_result = {"exists": 0}
+        # Mock operation.table_exists to return False
         mock_operation = MagicMock()
-        mock_operation.call_action = MagicMock(return_value=mock_result)
+        mock_operation.table_exists = MagicMock(return_value=Ok(False))
 
-        # Act & Assert
-        with pytest.raises(ValueError) as exc_info:
-            datasource.prepare(mock_operation)
+        # Act
+        result = datasource.prepare(mock_operation)
 
-        assert "Table public.missing_data does not exist" in str(exc_info.value)
+        # Assert
+        assert result.is_err
+        assert isinstance(result.error, UploadFailure)
+        assert "TABLE_NOT_FOUND" in result.error.code
 
-    def test_prepare_with_unexpected_result_format(self):
-        """Should raise ValueError with unexpected result format."""
+    def test_prepare_with_operation_error(self):
+        """Should propagate OperationError as UploadFailure."""
         # Arrange
         datasource = CASTableDataSource("public", "data")
 
-        # Mock result with unexpected format (not a dict-like object)
-        mock_result = "unexpected format"
+        # Mock operation.table_exists to return OperationError
         mock_operation = MagicMock()
-        mock_operation.call_action = MagicMock(return_value=mock_result)
-
-        # Act & Assert
-        with pytest.raises(ValueError) as exc_info:
-            datasource.prepare(mock_operation)
-
-        assert "Unexpected result format from table.tableExists" in str(exc_info.value)
-
-    def test_prepare_with_action_failure(self):
-        """Should raise RuntimeError when tableExists action fails."""
-        # Arrange
-        datasource = CASTableDataSource("public", "data")
-
-        mock_operation = MagicMock()
-        mock_operation.call_action = MagicMock(
-            side_effect=RuntimeError("action failed")
+        mock_operation.table_exists = MagicMock(
+            return_value=Err(
+                OperationError(
+                    code="TABLE_CHECK_FAILED", message="Failed to check table"
+                )
+            )
         )
 
-        # Act & Assert
-        with pytest.raises(RuntimeError) as exc_info:
-            datasource.prepare(mock_operation)
+        # Act
+        result = datasource.prepare(mock_operation)
 
-        assert "Failed to validate CAS table public.data" in str(exc_info.value)
+        # Assert
+        assert result.is_err
+        assert isinstance(result.error, UploadFailure)
+
+    def test_prepare_preserves_operation_error_context(self):
+        """Should preserve OperationError context when converting to UploadFailure."""
+        # Arrange
+        datasource = CASTableDataSource("public", "data")
+
+        mock_operation = MagicMock()
+        op_error = OperationError(
+            code="ACTION_FAILED",
+            message="action failed",
+            severity="ERROR",
+            context={"details": "test error"},
+        )
+        mock_operation.table_exists = MagicMock(return_value=Err(op_error))
+
+        # Act
+        result = datasource.prepare(mock_operation)
+
+        # Assert
+        assert result.is_err
+        assert isinstance(result.error, UploadFailure)
+        assert result.error.code == "ACTION_FAILED"
+        assert result.error.message == "action failed"
 
 
 class TestCASTableDataSourceFetchResult:
@@ -139,7 +154,7 @@ class TestCASTableDataSourceFetchResult:
         mock_result = {"Fetch": result_df}
 
         mock_operation = MagicMock()
-        mock_operation.call_action = MagicMock(return_value=mock_result)
+        mock_operation.call_action = MagicMock(return_value=Ok(mock_result))
 
         # Act
         result = datasource.fetch_result(
@@ -150,8 +165,9 @@ class TestCASTableDataSourceFetchResult:
         mock_operation.call_action.assert_called_once_with(
             "table.fetch", table={"name": "output", "caslib": "public"}
         )
-        assert isinstance(result, pd.DataFrame)
-        assert result is result_df
+        assert result.is_ok
+        assert isinstance(result.value, pd.DataFrame)
+        assert result.value is result_df
 
     def test_fetch_result_with_missing_fetch_key(self):
         """Should raise ValueError when result has no 'Fetch' key."""
@@ -161,13 +177,14 @@ class TestCASTableDataSourceFetchResult:
         # Mock result without 'Fetch' key
         mock_result = {"SomeOtherKey": "value"}
         mock_operation = MagicMock()
-        mock_operation.call_action = MagicMock(return_value=mock_result)
+        mock_operation.call_action = MagicMock(return_value=Ok(mock_result))
 
-        # Act & Assert
-        with pytest.raises(ValueError) as exc_info:
-            datasource.fetch_result(mock_operation, "public", "output")
+        # Act
+        result = datasource.fetch_result(mock_operation, "public", "output")
 
-        assert "Unexpected result format from table.fetch" in str(exc_info.value)
+        # Assert
+        assert result.is_err
+        assert isinstance(result.error, DataFetchFailure)
 
     def test_fetch_result_with_non_dataframe_value(self):
         """Should raise ValueError when 'Fetch' value is not DataFrame."""
@@ -177,14 +194,14 @@ class TestCASTableDataSourceFetchResult:
         # Mock result with non-DataFrame in 'Fetch'
         mock_result = {"Fetch": [1, 2, 3]}  # list, not DataFrame
         mock_operation = MagicMock()
-        mock_operation.call_action = MagicMock(return_value=mock_result)
+        mock_operation.call_action = MagicMock(return_value=Ok(mock_result))
 
-        # Act & Assert
-        with pytest.raises(ValueError) as exc_info:
-            datasource.fetch_result(mock_operation, "public", "output")
+        # Act
+        result = datasource.fetch_result(mock_operation, "public", "output")
 
-        assert "Expected DataFrame from fetch" in str(exc_info.value)
-        assert "got list" in str(exc_info.value)
+        # Assert
+        assert result.is_err
+        assert isinstance(result.error, DataFetchFailure)
 
     def test_fetch_result_with_action_failure(self):
         """Should raise RuntimeError when table.fetch fails."""
@@ -192,13 +209,18 @@ class TestCASTableDataSourceFetchResult:
         datasource = CASTableDataSource("public", "input")
 
         mock_operation = MagicMock()
-        mock_operation.call_action = MagicMock(side_effect=RuntimeError("fetch failed"))
+        mock_operation.call_action = MagicMock(
+            return_value=Err(
+                OperationError(code="FETCH_FAILED", message="fetch failed")
+            )
+        )
 
-        # Act & Assert
-        with pytest.raises(RuntimeError) as exc_info:
-            datasource.fetch_result(mock_operation, "public", "output")
+        # Act
+        result = datasource.fetch_result(mock_operation, "public", "output")
 
-        assert "Failed to fetch result from public.output" in str(exc_info.value)
+        # Assert
+        assert result.is_err
+        assert isinstance(result.error, DataFetchFailure)
 
 
 class TestCASTableDataSourceProperties:

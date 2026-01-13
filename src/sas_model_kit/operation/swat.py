@@ -11,7 +11,9 @@ import swat
 from pandas import DataFrame
 from typing_extensions import override
 
+from sas_model_kit.error import OperationError
 from sas_model_kit.operation.base import BaseOperation
+from sas_model_kit.result import Err, Ok, Result
 
 
 class ActionSetName(NamedTuple):
@@ -77,7 +79,9 @@ class SWATOperationAdapter(
             )
 
     @override
-    def call_action(self, action_name: str, **kwargs: Any) -> Any:
+    def call_action(
+        self, action_name: str, **kwargs: Any
+    ) -> Result[Any, OperationError]:
         """
         Execute a SAS action using SWAT with automatic actionset loading.
 
@@ -109,34 +113,49 @@ class SWATOperationAdapter(
             >>> # Subsequent calls reuse loaded actionset
             >>> result2 = adapter.call_action('astore.score', ...)
         """
-        # Validate action_name format
         if "." not in action_name:
-            raise ValueError(
-                f"Invalid action_name format: '{action_name}'. "
-                f"Expected 'actionset.action' (e.g., 'astore.score')"
+            return Err(
+                OperationError(
+                    code="INVALID_ACTION_NAME",
+                    message=(
+                        f"Invalid action_name format: '{action_name}'. "
+                        "Expected 'actionset.action' (e.g., 'astore.score')"
+                    ),
+                    context={"action_name": action_name},
+                )
             )
 
-        # Parse actionset and action
         actionset_name, action_method = self._parse_action_name(action_name)
-
-        # Auto-load actionset if not already loaded
         self._ensure_actionset_loaded(actionset_name)
 
         try:
-            # Use SWAT's __getattr__ pattern to access actionset
             actionset = getattr(self._session, actionset_name)
             action = getattr(actionset, action_method)
-
-            # Execute action
-            return action(**kwargs)
-
-        except AttributeError as e:
-            raise ValueError(
-                f"Action '{action_name}' not found in SWAT session. Original error: {e}"
-            ) from e
-
-        except Exception as e:
-            raise RuntimeError(f"Failed to execute action '{action_name}': {e}") from e
+            return Ok(action(**kwargs))
+        except AttributeError as exc:
+            return Err(
+                OperationError(
+                    code="ACTION_NOT_FOUND",
+                    message=(
+                        f"Action '{action_name}' not found in SWAT session. "
+                        f"Original error: {exc}"
+                    ),
+                    cause=exc,
+                    context={"action_name": action_name},
+                )
+            )
+        except Exception as exc:
+            return Err(
+                OperationError(
+                    code="UNEXPECTED_EXCEPTION",
+                    message=f"Failed to execute action '{action_name}': {exc}",
+                    cause=exc,
+                    context={
+                        "action_name": action_name,
+                        "exception_type": type(exc).__name__,
+                    },
+                )
+            )
 
     def _parse_action_name(self, action_name: str) -> ActionSetName:
         """Parse action_name into ActionSetName named tuple.
@@ -198,7 +217,7 @@ class SWATOperationAdapter(
         data: DataFrame | swat.SASDataFrame,
         caslib: str,
         table: str,
-    ) -> swat.CASTable:
+    ) -> Result[swat.CASTable, OperationError]:
         """
         Upload data to CAS using SWAT and return CASTable reference.
 
@@ -225,31 +244,34 @@ class SWATOperationAdapter(
             'my_data'
         """
         try:
-            # SWAT's upload_frame accepts pandas DataFrame
-            # Will auto-convert or raise TypeError if unsupported
             self._session.upload_frame(
                 data,
                 casout={
                     "name": table,
                     "caslib": caslib,
-                    "replace": True,  # Always replace for idempotency
+                    "replace": True,
                 },
             )
 
-            # Create and return CASTable reference
-            return self._session.CASTable(name=table, caslib=caslib)
+            return Ok(self._session.CASTable(name=table, caslib=caslib))
 
-        except TypeError as e:
-            raise TypeError(
-                f"Unsupported data type for upload: {type(data).__name__}. "
-                f"SWAT supports pandas DataFrame. Original error: {e}"
-            ) from e
-
-        except Exception as e:
-            raise RuntimeError(f"Failed to upload data to {caslib}.{table}: {e}") from e
+        except Exception as exc:
+            return Err(
+                OperationError(
+                    code="UPLOAD_FAILED",
+                    message=f"Failed to upload data to {caslib}.{table}: {exc}",
+                    cause=exc,
+                    context={
+                        "caslib": caslib,
+                        "table": table,
+                        "data_type": type(data).__name__,
+                        "exception_type": type(exc).__name__,
+                    },
+                )
+            )
 
     @override
-    def table_exists(self, caslib: str, table: str) -> bool:
+    def table_exists(self, caslib: str, table: str) -> Result[bool, OperationError]:
         """
         Check if a table exists in the specified CAS library.
 

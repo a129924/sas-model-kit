@@ -35,7 +35,9 @@ except ImportError as e:
 
 from typing_extensions import override
 
-from .exceptions import ColumnConflictError, TransformationError
+from sas_model_kit.error import DuplicateKeyError, OperationError
+from sas_model_kit.result import Err, Ok, UniqueKeyExecutionResult
+
 from .protocol import CASTableTransformer
 
 
@@ -107,35 +109,25 @@ class AddUniqueKeyTransformer(CASTableTransformer):
         self.output_table = output_table
 
     @override
-    def execute(self, input_table: CASTable) -> CASTable:
-        """Add unique key column and create new CAS table.
+    def execute(self, input_table: CASTable) -> UniqueKeyExecutionResult:
+        """Add unique key column and create new CAS table, returning Result."""
 
-        Args:
-            input_table: Input CAS table
-
-        Returns:
-            New CASTable with unique key column
-
-        Raises:
-            ColumnConflictError: If column name already exists
-            TransformationError: If DATA step execution fails
-
-        Note:
-            Creates a new table on the CAS server.
-            The unique key uses _threadid_ * 1e9 + _N_ for distributed safety.
-        """
-        # Check for column name conflict
-        if self.column_name in input_table.columns:  # type: ignore # input_table.columns is pd.Index(...)
-            raise ColumnConflictError(
-                f"Column '{self.column_name}' already exists in table. "
-                f"Choose a different column name."
+        if self.column_name in input_table.columns:  # type: ignore
+            return Err(
+                DuplicateKeyError(
+                    code="COLUMN_CONFLICT",
+                    message=(
+                        f"Column '{self.column_name}' already exists in table. "
+                        f"Choose a different column name."
+                    ),
+                    key_column=self.column_name,
+                    duplicate_count=0,
+                )
             )
 
-        # Determine output location
         input_caslib = input_table.params.get("caslib", "public")
         output_caslib = self.output_caslib or input_caslib
 
-        # Generate output table name if not provided
         if self.output_table:
             output_table = self.output_table
         else:
@@ -143,28 +135,32 @@ class AddUniqueKeyTransformer(CASTableTransformer):
             input_name = input_table.params["name"]
             output_table = f"{input_name}_with_{self.column_name}_{timestamp}"
 
-        # Generate DATA step code
         code = self._generate_data_step_code(
             input_table, input_caslib, output_caslib, output_table
         )
 
-        # Execute DATA step
-        try:
-            result = self.operation.call_action(
-                "datastep.runcode", code=code, _messagelevel="error"
-            )
-        except Exception as e:
-            raise TransformationError(f"Failed to add unique key column: {e}") from e
+        action_result = self.operation.call_action(
+            "datastep.runcode", code=code, _messagelevel="error"
+        )
 
-        # Check execution status
+        if action_result.is_err:
+            return Err(action_result.error)
+
+        result = action_result.value
+
         if hasattr(result, "status") and result.status:
-            raise TransformationError(f"DATA step failed with status: {result.status}")
+            return Err(
+                OperationError(
+                    code="DATASTEP_FAILED",
+                    message=f"DATA step failed with status: {result.status}",
+                    context={"status": result.status},
+                )
+            )
 
-        # Return new table
         connection = input_table.get_connection()
         output_cas_table = connection.CASTable(name=output_table, caslib=output_caslib)
 
-        return output_cas_table
+        return Ok(output_cas_table)
 
     def _generate_data_step_code(
         self,

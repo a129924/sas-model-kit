@@ -6,10 +6,13 @@ models to work with data already on the server without upload/download.
 """
 
 import pandas as pd
+from swat.cas.results import CASResults
 from typing_extensions import override
 
 from sas_model_kit.datasource.base import DataSourceProtocol
+from sas_model_kit.error import DataFetchFailure, OperationError, UploadFailure
 from sas_model_kit.operation.base import OperationProtocol
+from sas_model_kit.result import Err, Ok, Result
 
 
 class CASTableDataSource(DataSourceProtocol[pd.DataFrame]):
@@ -72,116 +75,92 @@ class CASTableDataSource(DataSourceProtocol[pd.DataFrame]):
         self._caslib = caslib
         self._table = table
 
-    @override
-    def prepare(self, operation: OperationProtocol) -> None:
-        """
-        Validate that CAS table exists.
+    def _process_success(self, result: CASResults):
+        """Process successful CASResults (placeholder)."""
+        pass
 
-        Unlike DataFrameDataSource, this does NOT upload data since the
-        table should already exist on the server. Only validates existence.
+    @staticmethod
+    def _to_upload_failure(error: OperationError) -> UploadFailure:
+        """Convert OperationError to UploadFailure."""
+        return UploadFailure(
+            code=error.code,
+            message=error.message,
+            severity=error.severity,
+            cause=error.cause,
+            context=error.context,
+        )
 
-        Args:
-            operation: Operation adapter for validation
-
-        Raises:
-            ValueError: If table does not exist
-            RuntimeError: If validation fails
-
-        Example:
-            >>> datasource.prepare(operation)
-            # Validates public.existing_data exists
-        """
-        try:
-            # Use table.tableExists action to validate
-            result = operation.call_action(
-                "table.tableExists", caslib=self._caslib, name=self._table
-            )
-
-            # Check if table exists
-            # SWAT returns results in result['exists'] format
-            if hasattr(result, "__getitem__") and hasattr(result, "get"):
-                exists = result.get("exists", False)
-
-                if not exists:
-                    raise ValueError(
-                        f"Table {self._caslib}.{self._table} does not exist"
-                    )
-            else:
-                raise ValueError(
-                    f"Unexpected result format from table.tableExists: {type(result)}"
+    def _validate_table_exists(self, exists: bool) -> Result[None, UploadFailure]:
+        """Validate that table exists."""
+        if not exists:
+            return Err(
+                UploadFailure(
+                    code="TABLE_NOT_FOUND",
+                    message=f"Table {self._caslib}.{self._table} does not exist",
+                    context={"caslib": self._caslib, "table": self._table},
                 )
+            )
+        return Ok(None)
 
-        except ValueError:
-            # Re-raise ValueError as-is
-            raise
+    @override
+    def prepare(self, operation: OperationProtocol) -> Result[None, UploadFailure]:
+        """Validate that CAS table exists, returning Result.
 
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to validate CAS table {self._caslib}.{self._table}: {e}"
-            ) from e
+        Uses and_then for clean error propagation and chaining.
+        """
+        return (
+            operation.table_exists(self._caslib, self._table)
+            .map_err(self._to_upload_failure)
+            .and_then(self._validate_table_exists)
+        )
 
     @override
     def fetch_result(
         self, operation: OperationProtocol, caslib: str, table: str
-    ) -> pd.DataFrame:
-        """
-        Fetch results from CAS as DataFrame.
+    ) -> Result[pd.DataFrame, DataFetchFailure]:
+        """Fetch results from CAS as DataFrame and return Result."""
 
-        Downloads the specified CAS table and returns it as a pandas DataFrame.
-        Uses SWAT's fetch() action for efficient data retrieval.
-
-        Implementation is identical to DataFrameDataSource.fetch_result()
-        since both return DataFrame from CAS tables.
-
-        Args:
-            operation: Operation adapter for fetching data
-            caslib: Source CAS library containing results
-            table: Source table name containing results
-
-        Returns:
-            Results as pandas DataFrame
-
-        Raises:
-            ValueError: If result cannot be converted to DataFrame
-            RuntimeError: If fetch fails
-
-        Example:
-            >>> result_df = datasource.fetch_result(
-            ...     operation,
-            ...     caslib='public',
-            ...     table='scored_data'
-            ... )
-        """
-        try:
-            # Use table.fetch action to retrieve data
-            result = operation.call_action(
-                "table.fetch", table={"name": table, "caslib": caslib}
+        def _to_fetch_failure(error: OperationError) -> DataFetchFailure:
+            return DataFetchFailure(
+                code=error.code,
+                message=error.message,
+                severity=error.severity,
+                cause=error.cause,
+                context=error.context,
             )
 
-            # Extract DataFrame from CASResults
-            # SWAT returns results in result['Fetch'] format
-            if hasattr(result, "__getitem__") and "Fetch" in result:
-                df = result["Fetch"]
+        action_result = operation.call_action(
+            "table.fetch", table={"name": table, "caslib": caslib}
+        )
 
-                if not isinstance(df, pd.DataFrame):
-                    raise ValueError(
-                        f"Expected DataFrame from fetch, got {type(df).__name__}"
+        if action_result.is_err:
+            return Err(_to_fetch_failure(action_result.error))
+
+        result = action_result.value
+
+        if hasattr(result, "__getitem__") and "Fetch" in result:
+            df = result["Fetch"]
+
+            if not isinstance(df, pd.DataFrame):
+                return Err(
+                    DataFetchFailure(
+                        code="FETCH_RESULT_TYPE_INVALID",
+                        message=(
+                            f"Expected DataFrame from fetch, got {type(df).__name__}"
+                        ),
+                        context={"caslib": caslib, "table": table},
                     )
-
-                return df
-
-            else:
-                raise ValueError(
-                    f"Unexpected result format from table.fetch: {type(result)}"
                 )
 
-        except (ValueError, TypeError):
-            # Re-raise validation errors as-is
-            raise
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to fetch result from {caslib}.{table}: {e}"
-            ) from e
+            return Ok(df)
+
+        return Err(
+            DataFetchFailure(
+                code="FETCH_RESULT_FORMAT_INVALID",
+                message=f"Unexpected result format from table.fetch: {type(result)}",
+                context={"caslib": caslib, "table": table},
+            )
+        )
 
     @property
     def caslib(self) -> str:
