@@ -1,6 +1,6 @@
 [project]
 name = "sas-model-kit"
-version = "0.2.0"
+version = "0.3.0"
 description = "SAS Model Kit - Result layer and CAS table transformers"
 readme = "README.md"
 authors = [
