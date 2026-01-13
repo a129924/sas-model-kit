@@ -29,6 +29,9 @@ except ImportError as e:
         "Please install it via 'pip install swat'."
     ) from e
 
+from sas_model_kit.error import OperationError, TransformationFailure
+from sas_model_kit.result import Result
+
 from ..operation.base import OperationProtocol
 
 
@@ -72,38 +75,23 @@ class CASTableTransformer(ABC):
         self.operation = operation
 
     @abstractmethod
-    def execute(self, input_table: CASTable) -> CASTable:
+    def execute(self, input_table: CASTable) -> Result[CASTable, TransformationFailure]:
         """Execute the transformation on the input table.
 
         This method must be implemented by all concrete transformers.
         It should perform a single, well-defined transformation and
-        return the transformed CASTable.
+        return the transformed CASTable wrapped in a Result.
 
         Design Contract:
             - Must not modify input_table unless explicitly documented
-            - Must raise specific exceptions (not generic Exception)
-            - Must return a valid CASTable or raise exception
-            - Must not swallow exceptions from underlying operations
+            - Returns Result[CASTable, semantic_error | OperationError]
+            - Semantic errors: SortError, DuplicateKeyError (execution, not validation)
+            - Must not validate input (validation is caller's responsibility)
 
         Args:
             input_table: The CAS table to transform
 
         Returns:
-            Transformed CASTable
-
-        Raises:
-            TransformationError: If transformation fails
-            InvalidColumnError: If required columns are missing
-            ValueError: If parameters are invalid
-
-        Examples:
-            >>> transformer = SortTransformer(operation, by=['age'])
-            >>> sorted_table = transformer.execute(table)
-
-            >>> # Error handling
-            >>> try:
-            ...     result = transformer.execute(table)
-            ... except InvalidColumnError as e:
-            ...     print(f"Column error: {e}")
+            Result containing a transformed CASTable or failure details.
         """
         ...

@@ -25,7 +25,7 @@ Examples:
     >>> result: TransformationResult = Err(TransformationError("Sort failed"))
 """
 
-from typing import TypeAlias
+from typing import TYPE_CHECKING, TypeAlias
 
 try:
     from swat import CASTable
@@ -36,9 +36,11 @@ except ImportError as e:
     ) from e
 
 from ..result.base import Result
-from ..transformer.exceptions import TransformationError
 
-# Type alias for explicit semantics
-TransformationResult: TypeAlias = Result[CASTable, TransformationError]
+if TYPE_CHECKING:  # pragma: no cover
+    from ..transformer.exceptions import TransformationError
+
+# Type alias for explicit semantics (use string annotation to avoid circular import)
+TransformationResult: TypeAlias = "Result[CASTable, TransformationError]"
 
 __all__ = ["TransformationResult"]
