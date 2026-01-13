@@ -4,8 +4,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from sas_model_kit.transformer.protocol import CASTableTransformer
 from sas_model_kit.result import Ok
+from sas_model_kit.transformer.protocol import CASTableTransformer
 
 
 def test_transformer_protocol_is_abstract() -> None:
