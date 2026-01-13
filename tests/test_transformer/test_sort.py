@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from sas_model_kit.transformer.exceptions import InvalidColumnError
+from sas_model_kit.result import Ok
 from sas_model_kit.transformer.sort import SortTransformer
 
 
@@ -32,7 +32,7 @@ def test_sort_single_column_ascending(mock_operation, mock_table) -> None:
     mock_table.sort_values.assert_called_once_with(
         by=["age"], ascending=True, inplace=False
     )
-    assert result is not None
+    assert result.is_ok
 
 
 def test_sort_single_column_descending(mock_operation, mock_table) -> None:
@@ -43,6 +43,7 @@ def test_sort_single_column_descending(mock_operation, mock_table) -> None:
     mock_table.sort_values.assert_called_once_with(
         by=["salary"], ascending=False, inplace=False
     )
+    assert result.is_ok
 
 
 def test_sort_multiple_columns(mock_operation, mock_table) -> None:
@@ -55,22 +56,7 @@ def test_sort_multiple_columns(mock_operation, mock_table) -> None:
     mock_table.sort_values.assert_called_once_with(
         by=["region", "salary"], ascending=[True, False], inplace=False
     )
-
-
-def test_sort_invalid_column_raises(mock_operation, mock_table) -> None:
-    """Test that sorting by non-existent column raises error."""
-    transformer = SortTransformer(mock_operation, by=["nonexistent"])
-
-    with pytest.raises(InvalidColumnError, match="not found in table"):
-        transformer.execute(mock_table)
-
-
-def test_sort_multiple_invalid_columns(mock_operation, mock_table) -> None:
-    """Test error when multiple columns don't exist."""
-    transformer = SortTransformer(mock_operation, by=["age", "invalid1", "invalid2"])
-
-    with pytest.raises(InvalidColumnError, match="invalid1"):
-        transformer.execute(mock_table)
+    assert result.is_ok
 
 
 def test_sort_empty_by_raises(mock_operation) -> None:
@@ -108,11 +94,12 @@ def test_sort_stores_parameters(mock_operation) -> None:
 def test_sort_does_not_modify_original_table(mock_operation, mock_table) -> None:
     """Test that original table is not modified (inplace=False)."""
     transformer = SortTransformer(mock_operation, by=["age"])
-    transformer.execute(mock_table)
+    result = transformer.execute(mock_table)
 
     # Verify inplace=False was used
     call_kwargs = mock_table.sort_values.call_args[1]
     assert call_kwargs["inplace"] is False
+    assert result.is_ok
 
 
 def test_sort_returns_sorted_table(mock_operation, mock_table) -> None:
@@ -123,7 +110,8 @@ def test_sort_returns_sorted_table(mock_operation, mock_table) -> None:
     transformer = SortTransformer(mock_operation, by=["age"])
     result = transformer.execute(mock_table)
 
-    assert result is expected_sorted
+    assert result.is_ok
+    assert result.value is expected_sorted
 
 
 def test_sort_with_single_bool_ascending(mock_operation, mock_table) -> None:
@@ -139,3 +127,4 @@ def test_sort_with_single_bool_ascending(mock_operation, mock_table) -> None:
     mock_table.sort_values.assert_called_once_with(
         by=["age", "name"], ascending=True, inplace=False
     )
+    assert result.is_ok

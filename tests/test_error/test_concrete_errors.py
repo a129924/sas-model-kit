@@ -5,7 +5,6 @@ from sas_model_kit.error import (
     ConflictingRuleFailure,
     DataFetchFailure,
     DuplicateKeyError,
-    InvalidColumnFailure,
     InvalidTypeFailure,
     MissingFieldFailure,
     OperationError,
@@ -30,12 +29,6 @@ def test_datasource_errors_inherit_base() -> None:
 
 def test_transformation_errors_defaults() -> None:
     base = TransformationFailure(code="TR000", message="transform")
-    invalid = InvalidColumnFailure(
-        code="TR001",
-        message="missing cols",
-        columns=["a"],
-        available_columns=["b", "c"],
-    )
     sort_err = SortError(code="TR002", message="sort", reason="bad order")
     dup_err = DuplicateKeyError(
         code="TR003",
@@ -45,8 +38,6 @@ def test_transformation_errors_defaults() -> None:
     )
     assert isinstance(base, BaseError)
     assert base.operation == ""
-    assert invalid.columns == ["a"]
-    assert invalid.available_columns == ["b", "c"]
     assert sort_err.reason == "bad order"
     assert dup_err.key_column == "id"
     assert dup_err.duplicate_count == 2

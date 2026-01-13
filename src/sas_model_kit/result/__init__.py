@@ -11,7 +11,6 @@ from sas_model_kit.error import (
     DataFetchFailure,
     DuplicateKeyError,
     ErrorSeverity,
-    InvalidColumnFailure,
     InvalidTypeFailure,
     MissingFieldFailure,
     OperationError,
@@ -44,10 +43,10 @@ if TYPE_CHECKING:  # pragma: no cover
 OperationResult = Result[Any, OperationError]
 UploadResult = Result[None, UploadFailure]
 FetchResult = Result[Any, DataFetchFailure]
-TransformationExecutionResult = Result[CASTable, TransformationFailure | OperationError]
-SortExecutionResult = Result[
-    CASTable, InvalidColumnFailure | SortError | OperationError
+TransformationExecutionResult = Result[
+    CASTable, SortError | DuplicateKeyError | OperationError
 ]
+SortExecutionResult = Result[CASTable, SortError | OperationError]
 UniqueKeyExecutionResult = Result[CASTable, DuplicateKeyError | OperationError]
 ValidationResult = Result[
     None,
@@ -81,7 +80,6 @@ __all__ = [
     "ConflictingRuleFailure",
     "DataFetchFailure",
     "DuplicateKeyError",
-    "InvalidColumnFailure",
     "InvalidTypeFailure",
     "MissingFieldFailure",
     "OperationError",

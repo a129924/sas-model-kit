@@ -15,23 +15,23 @@ class TransformationFailure(BaseError):
 
 
 @dataclass(frozen=True)
-class InvalidColumnFailure(TransformationFailure):
-    """Missing or invalid required columns."""
-
-    columns: list[str] = field(default_factory=list)
-    available_columns: list[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
 class SortError(TransformationFailure):
-    """Sorting failure with a reason."""
+    """Sorting failure with a reason.
+
+    This is a semantic/execution error, not a validation error.
+    Validation (e.g., column existence) is caller's responsibility.
+    """
 
     reason: str = ""
 
 
 @dataclass(frozen=True)
 class DuplicateKeyError(TransformationFailure):
-    """Duplicate key encountered during uniqueness enforcement."""
+    """Duplicate key encountered during uniqueness enforcement.
+
+    This is a semantic/execution error, not a validation error.
+    Validation (e.g., column existence) is caller's responsibility.
+    """
 
     key_column: str = ""
     duplicate_count: int = 0

@@ -34,7 +34,9 @@ except ImportError as e:
 
 from typing_extensions import override
 
-from .exceptions import InvalidColumnError
+from sas_model_kit.error import OperationError, SortError
+from sas_model_kit.result import Err, Ok, SortExecutionResult
+
 from .protocol import CASTableTransformer
 
 
@@ -98,40 +100,46 @@ class SortTransformer(CASTableTransformer):
         self.ascending = ascending
 
     @override
-    def execute(self, input_table: CASTable) -> CASTable:
+    def execute(self, input_table: CASTable) -> SortExecutionResult:
         """Apply sort parameters to table (non-materialized).
 
+        Pure Transform: Only executes sorting, assumes input is valid.
+        Validation (e.g., column existence) is caller's responsibility.
+
         Args:
-            input_table: Input CAS table
+            input_table: Input CAS table (caller must ensure columns exist)
 
         Returns:
             New CASTable instance with sort parameters set
             (actual sorting happens at fetch time)
 
-        Raises:
-            InvalidColumnError: If any sort column doesn't exist
-
         Note:
             Returns deepcopy of input table with sort parameters.
             Original table is not modified (inplace=False).
         """
-        # Validate columns exist
-        missing_cols = [col for col in self.by if col not in input_table.columns]  # type: ignore
-        # input_table.columns is pd.Index(...)
-        if missing_cols:
-            raise InvalidColumnError(
-                f"Columns not found in table: {missing_cols}. "
-                f"Available columns: {list(input_table.columns)}"  # type: ignore
+        try:
+            sorted_table = input_table.sort_values(
+                by=self.by,
+                ascending=self.ascending,  # type: ignore
+                inplace=False,
+            )
+        except Exception as exc:
+            return Err(
+                OperationError(
+                    code="SORT_UNEXPECTED_EXCEPTION",
+                    message=str(exc),
+                    cause=exc,
+                    context={"exception_type": type(exc).__name__},
+                )
             )
 
-        # Use CASTable's built-in sort_values (non-materialized)
-        sorted_table = input_table.sort_values(
-            by=self.by,
-            ascending=self.ascending,  # Support single bool or list # type: ignore
-            inplace=False,  # Don't modify original
-        )
-
         if sorted_table is None:
-            raise RuntimeError("Sorting failed, received None from sort_values()")
+            return Err(
+                SortError(
+                    code="SORT_RETURNED_NONE",
+                    message="Sorting failed, received None from sort_values()",
+                    reason="sort_values returned None",
+                )
+            )
 
-        return sorted_table
+        return Ok(sorted_table)
