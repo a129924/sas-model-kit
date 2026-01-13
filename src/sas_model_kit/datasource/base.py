@@ -13,7 +13,9 @@ DataSource responsibilities (SRP - Single Responsibility Principle):
 
 from typing import Generic, Protocol, TypeVar
 
+from sas_model_kit.error import DataFetchFailure, UploadFailure
 from sas_model_kit.operation.base import OperationProtocol
+from sas_model_kit.result import Result
 
 # Generic type for data source return type
 ReSourceT = TypeVar("ReSourceT", covariant=True)
@@ -51,7 +53,7 @@ class DataSourceProtocol(Protocol, Generic[ReSourceT]):
         ... )
     """
 
-    def prepare(self, operation: OperationProtocol) -> None:
+    def prepare(self, operation: OperationProtocol) -> Result[None, UploadFailure]:
         """
         Prepare data for server-side execution.
 
@@ -74,7 +76,7 @@ class DataSourceProtocol(Protocol, Generic[ReSourceT]):
 
     def fetch_result(
         self, operation: OperationProtocol, caslib: str, table: str
-    ) -> ReSourceT:
+    ) -> Result[ReSourceT, DataFetchFailure]:
         """
         Fetch execution results from server.
 

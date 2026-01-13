@@ -104,7 +104,9 @@ class TestCASTableDataSourcePrepare:
         mock_operation = MagicMock()
         mock_operation.table_exists = MagicMock(
             return_value=Err(
-                OperationError(code="TABLE_CHECK_FAILED", message="Failed to check table")
+                OperationError(
+                    code="TABLE_CHECK_FAILED", message="Failed to check table"
+                )
             )
         )
 
@@ -125,11 +127,9 @@ class TestCASTableDataSourcePrepare:
             code="ACTION_FAILED",
             message="action failed",
             severity="ERROR",
-            context={"details": "test error"}
+            context={"details": "test error"},
         )
-        mock_operation.table_exists = MagicMock(
-            return_value=Err(op_error)
-        )
+        mock_operation.table_exists = MagicMock(return_value=Err(op_error))
 
         # Act
         result = datasource.prepare(mock_operation)

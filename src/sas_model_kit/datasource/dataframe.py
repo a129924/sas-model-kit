@@ -11,7 +11,9 @@ import pandas as pd
 from typing_extensions import override
 
 from sas_model_kit.datasource.base import DataSourceProtocol
+from sas_model_kit.error import DataFetchFailure, OperationError, UploadFailure
 from sas_model_kit.operation.base import OperationProtocol
+from sas_model_kit.result import Err, Ok, Result
 
 # Type variables for generic OperationProtocol support
 OperationReturnType = TypeVar("OperationReturnType")  # Any type the operation returns
@@ -87,81 +89,71 @@ class DataFrameDataSource(DataSourceProtocol[pd.DataFrame]):
         self._table = table
 
     @override
-    def prepare(self, operation: OperationProtocol[pd.DataFrame, Any]) -> None:
-        """
-        Upload DataFrame to CAS server.
+    def prepare(
+        self, operation: OperationProtocol[pd.DataFrame, Any]
+    ) -> Result[None, UploadFailure]:
+        """Upload DataFrame to CAS server and return Result."""
 
-        Args:
-            operation: Operation adapter for uploading data
+        def _to_upload_failure(error: OperationError) -> UploadFailure:
+            return UploadFailure(
+                code=error.code,
+                message=error.message,
+                severity=error.severity,
+                cause=error.cause,
+                context=error.context,
+            )
 
-        Raises:
-            RuntimeError: If upload fails
-
-        Example:
-            >>> datasource.prepare(operation)
-            # DataFrame uploaded to public.input_data
-        """
-        try:
+        return (
             operation.upload_data(self._data, caslib=self._caslib, table=self._table)
-        except Exception as e:
-            raise RuntimeError(f"Failed to prepare DataFrame data source: {e}") from e
+            .map(lambda _: None)
+            .map_err(_to_upload_failure)
+        )
 
     @override
     def fetch_result(
         self, operation: OperationProtocol[pd.DataFrame, Any], caslib: str, table: str
-    ) -> pd.DataFrame:
-        """
-        Fetch results from CAS as DataFrame.
+    ) -> Result[pd.DataFrame, DataFetchFailure]:
+        """Fetch results from CAS as DataFrame and return Result."""
 
-        Downloads the specified CAS table and returns it as a pandas DataFrame.
-        Uses SWAT's fetch() action for efficient data retrieval.
-
-        Args:
-            operation: Operation adapter for fetching data
-            caslib: Source CAS library containing results
-            table: Source table name containing results
-
-        Returns:
-            Results as pandas DataFrame
-
-        Raises:
-            ValueError: If result cannot be converted to DataFrame
-            RuntimeError: If fetch fails
-
-        Example:
-            >>> result_df = datasource.fetch_result(
-            ...     operation,
-            ...     caslib='public',
-            ...     table='scored_data'
-            ... )
-        """
-        try:
-            # Use table.fetch action to retrieve data
-            result = operation.call_action(
-                "table.fetch", table={"name": table, "caslib": caslib}
+        def _to_fetch_failure(error: OperationError) -> DataFetchFailure:
+            return DataFetchFailure(
+                code=error.code,
+                message=error.message,
+                severity=error.severity,
+                cause=error.cause,
+                context=error.context,
             )
 
-            # Extract DataFrame from CASResults
-            # SWAT returns results in result['Fetch'] format
-            if hasattr(result, "__getitem__") and "Fetch" in result:
-                df = result["Fetch"]
+        action_result = operation.call_action(
+            "table.fetch", table={"name": table, "caslib": caslib}
+        )
 
-                if not isinstance(df, pd.DataFrame):
-                    raise ValueError(
-                        f"Expected DataFrame from fetch, got {type(df).__name__}"
+        match action_result:
+            case Err():
+                return Err(_to_fetch_failure(action_result.error))
+            case Ok(result):
+                result = action_result.value
+
+        if hasattr(result, "__getitem__") and "Fetch" in result:
+            df = result["Fetch"]
+
+            if not isinstance(df, pd.DataFrame):
+                return Err(
+                    DataFetchFailure(
+                        code="FETCH_RESULT_TYPE_INVALID",
+                        message=(
+                            f"Expected DataFrame from fetch, got {type(df).__name__}"
+                        ),
+                        context={"caslib": caslib, "table": table},
                     )
-
-                return df
-
-            else:
-                raise ValueError(
-                    f"Unexpected result format from table.fetch: {type(result)}"
                 )
 
-        except (ValueError, TypeError):
-            # Re-raise validation errors as-is
-            raise
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to fetch result from {caslib}.{table}: {e}"
-            ) from e
+            return Ok(df)
+
+        return Err(
+            DataFetchFailure(
+                code="FETCH_RESULT_FORMAT_INVALID",
+                message=f"Unexpected result format from table.fetch: {type(result)}",
+                context={"caslib": caslib, "table": table},
+            )
+        )

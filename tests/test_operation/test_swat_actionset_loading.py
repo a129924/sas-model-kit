@@ -32,6 +32,8 @@ class TestActionsetAutoLoading:
             # Assert
             mock_session.loadactionset.assert_called_once_with("astore")
             mock_action.assert_called_once_with(table="input")
+            assert result.is_ok
+            assert result.value == {"result": "success"}
             assert adapter._loaded_actionsets == {"astore"}
 
     def test_actionset_not_reloaded_on_second_call(self) -> None:
@@ -52,12 +54,12 @@ class TestActionsetAutoLoading:
 
             # Act - First call
             adapter.call_action("astore.score", table="input1")
-            # Act - Second call
-            adapter.call_action("astore.score", table="input2")
+            second = adapter.call_action("astore.score", table="input2")
 
             # Assert - loadactionset called only once (or zero if has_actionset=True)
             assert mock_session.loadactionset.call_count <= 1
             assert "astore" in adapter._loaded_actionsets
+            assert second.is_ok
 
     def test_multiple_actionsets_tracked_separately(self) -> None:
         """Should track multiple actionsets independently."""
@@ -79,13 +81,17 @@ class TestActionsetAutoLoading:
             adapter = SWATOperationAdapter(mock_session)
 
             # Act
-            adapter.call_action("astore.score", table="input")
-            adapter.call_action("explainModel.shapleyExplainer", data="train")
+            result_one = adapter.call_action("astore.score", table="input")
+            result_two = adapter.call_action(
+                "explainModel.shapleyExplainer", data="train"
+            )
 
             # Assert
             assert "astore" in adapter._loaded_actionsets
             assert "explainModel" in adapter._loaded_actionsets
             assert len(adapter._loaded_actionsets) == 2
+            assert result_one.is_ok
+            assert result_two.is_ok
 
     def test_actionset_already_on_server_not_reloaded(self) -> None:
         """Should not call loadactionset if server already has it."""
@@ -101,11 +107,12 @@ class TestActionsetAutoLoading:
             adapter = SWATOperationAdapter(mock_session)
 
             # Act
-            adapter.call_action("astore.score", table="input")
+            result = adapter.call_action("astore.score", table="input")
 
             # Assert
             mock_session.loadactionset.assert_not_called()
             assert "astore" in adapter._loaded_actionsets
+            assert result.is_ok
 
     def test_loadactionset_failure_graceful(self) -> None:
         """Should continue execution even if loadactionset fails."""
@@ -127,7 +134,8 @@ class TestActionsetAutoLoading:
 
             # Assert - Execution continues
             assert "astore" in adapter._loaded_actionsets
-            assert result == {"result": "ok"}
+            assert result.is_ok
+            assert result.value == {"result": "ok"}
 
     def test_datastep_actionset_auto_loaded(self) -> None:
         """Should auto-load datastep actionset for runCode."""
@@ -144,11 +152,12 @@ class TestActionsetAutoLoading:
             adapter = SWATOperationAdapter(mock_session)
 
             # Act
-            adapter.call_action("datastep.runCode", code="data x; run;")
+            result = adapter.call_action("datastep.runCode", code="data x; run;")
 
             # Assert
             assert "datastep" in adapter._loaded_actionsets
             mock_datastep.runCode.assert_called_once()
+            assert result.is_ok
 
 
 class TestActionsetInitialization:

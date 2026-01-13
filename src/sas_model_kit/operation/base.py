@@ -13,6 +13,10 @@ Operation responsibilities:
 from abc import ABC, abstractmethod
 from typing import Any, Final, Generic, Protocol, TypeVar
 
+from sas_model_kit.error import OperationError
+from sas_model_kit.error.operation import TableNotFoundError
+from sas_model_kit.result import Result
+
 ReSourceType = TypeVar("ReSourceType", contravariant=True)
 ReturnType = TypeVar("ReturnType", covariant=True)
 LibraryConnectionT = TypeVar("LibraryConnectionT", covariant=True)
@@ -45,7 +49,9 @@ class OperationProtocol(
         ...     print("Table exists")
     """
 
-    def call_action(self, action_name: str, **kwargs: Any) -> Any:
+    def call_action(
+        self, action_name: str, **kwargs: Any
+    ) -> Result[Any, OperationError]:
         """
         Execute a SAS action.
 
@@ -71,7 +77,9 @@ class OperationProtocol(
         """
         ...
 
-    def upload_data(self, data: ReSourceType, caslib: str, table: str) -> ReturnType:
+    def upload_data(
+        self, data: ReSourceType, caslib: str, table: str
+    ) -> Result[ReturnType, OperationError]:
         """
         Upload data to server.
 
@@ -94,7 +102,9 @@ class OperationProtocol(
         """
         ...
 
-    def table_exists(self, caslib: str, table: str) -> bool:
+    def table_exists(
+        self, caslib: str, table: str
+    ) -> Result[bool, TableNotFoundError | OperationError]:
         """
         Check if a table exists in the specified CAS library.
 
@@ -111,7 +121,7 @@ class OperationProtocol(
         """
         ...
 
-    def model_exists(self, caslib: str, table: str) -> bool:
+    def model_exists(self, caslib: str, table: str) -> Result[bool, OperationError]:
         """
         Check if a model (ASTORE) exists in the specified CAS library.
 
@@ -202,14 +212,16 @@ class BaseOperation(
         ...
 
     @abstractmethod
-    def call_action(self, action_name: str, **kwargs: Any) -> Any: ...
+    def call_action(
+        self, action_name: str, **kwargs: Any
+    ) -> Result[Any, OperationError]: ...
     @abstractmethod
     def upload_data(
         self, data: ReSourceType, caslib: str, table: str
-    ) -> ReturnType: ...
+    ) -> Result[ReturnType, OperationError]: ...
     @abstractmethod
-    def table_exists(self, caslib: str, table: str) -> bool: ...
+    def table_exists(self, caslib: str, table: str) -> Result[bool, OperationError]: ...
     @abstractmethod
-    def model_exists(self, caslib: str, table: str) -> bool: ...
+    def model_exists(self, caslib: str, table: str) -> Result[bool, OperationError]: ...
     @abstractmethod
     def drop_table(self, caslib: str, table: str) -> None: ...

@@ -14,6 +14,8 @@ import pandas as pd
 import pytest
 
 from sas_model_kit.datasource.dataframe import DataFrameDataSource
+from sas_model_kit.error import DataFetchFailure, OperationError, UploadFailure
+from sas_model_kit.result import Err, Ok
 
 
 class TestDataFrameDataSourceInit:
@@ -88,15 +90,17 @@ class TestDataFrameDataSourcePrepare:
         datasource = DataFrameDataSource(df, "public", "my_data")
 
         mock_operation = MagicMock()
-        mock_operation.upload_data = MagicMock()
+        mock_operation.upload_data = MagicMock(return_value=Ok("uploaded"))
 
         # Act
-        datasource.prepare(mock_operation)
+        result = datasource.prepare(mock_operation)
 
         # Assert
         mock_operation.upload_data.assert_called_once_with(
             df, caslib="public", table="my_data"
         )
+        assert result.is_ok
+        assert result.value is None
 
     def test_prepare_with_upload_failure(self):
         """Should raise RuntimeError when upload fails."""
@@ -106,14 +110,17 @@ class TestDataFrameDataSourcePrepare:
 
         mock_operation = MagicMock()
         mock_operation.upload_data = MagicMock(
-            side_effect=RuntimeError("upload failed")
+            return_value=Err(
+                OperationError(code="UPLOAD_FAILED", message="upload failed")
+            )
         )
 
-        # Act & Assert
-        with pytest.raises(RuntimeError) as exc_info:
-            datasource.prepare(mock_operation)
+        # Act
+        result = datasource.prepare(mock_operation)
 
-        assert "Failed to prepare DataFrame data source" in str(exc_info.value)
+        # Assert
+        assert result.is_err
+        assert isinstance(result.error, UploadFailure)
 
 
 class TestDataFrameDataSourceFetchResult:
@@ -130,7 +137,7 @@ class TestDataFrameDataSourceFetchResult:
         mock_result = {"Fetch": result_df}
 
         mock_operation = MagicMock()
-        mock_operation.call_action = MagicMock(return_value=mock_result)
+        mock_operation.call_action = MagicMock(return_value=Ok(mock_result))
 
         # Act
         result = datasource.fetch_result(
@@ -141,8 +148,9 @@ class TestDataFrameDataSourceFetchResult:
         mock_operation.call_action.assert_called_once_with(
             "table.fetch", table={"name": "output", "caslib": "public"}
         )
-        assert isinstance(result, pd.DataFrame)
-        assert result is result_df
+        assert result.is_ok
+        assert isinstance(result.value, pd.DataFrame)
+        assert result.value is result_df
 
     def test_fetch_result_with_missing_fetch_key(self):
         """Should raise ValueError when result has no 'Fetch' key."""
@@ -153,13 +161,14 @@ class TestDataFrameDataSourceFetchResult:
         # Mock result without 'Fetch' key
         mock_result = {"SomeOtherKey": "value"}
         mock_operation = MagicMock()
-        mock_operation.call_action = MagicMock(return_value=mock_result)
+        mock_operation.call_action = MagicMock(return_value=Ok(mock_result))
 
-        # Act & Assert
-        with pytest.raises(ValueError) as exc_info:
-            datasource.fetch_result(mock_operation, "public", "output")
+        # Act
+        result = datasource.fetch_result(mock_operation, "public", "output")
 
-        assert "Unexpected result format from table.fetch" in str(exc_info.value)
+        # Assert
+        assert result.is_err
+        assert isinstance(result.error, DataFetchFailure)
 
     def test_fetch_result_with_non_dataframe_value(self):
         """Should raise ValueError when 'Fetch' value is not DataFrame."""
@@ -170,14 +179,14 @@ class TestDataFrameDataSourceFetchResult:
         # Mock result with non-DataFrame in 'Fetch'
         mock_result = {"Fetch": "not a dataframe"}
         mock_operation = MagicMock()
-        mock_operation.call_action = MagicMock(return_value=mock_result)
+        mock_operation.call_action = MagicMock(return_value=Ok(mock_result))
 
-        # Act & Assert
-        with pytest.raises(ValueError) as exc_info:
-            datasource.fetch_result(mock_operation, "public", "output")
+        # Act
+        result = datasource.fetch_result(mock_operation, "public", "output")
 
-        assert "Expected DataFrame from fetch" in str(exc_info.value)
-        assert "got str" in str(exc_info.value)
+        # Assert
+        assert result.is_err
+        assert isinstance(result.error, DataFetchFailure)
 
     def test_fetch_result_with_action_failure(self):
         """Should raise RuntimeError when table.fetch fails."""
@@ -186,10 +195,15 @@ class TestDataFrameDataSourceFetchResult:
         datasource = DataFrameDataSource(df, "public", "input")
 
         mock_operation = MagicMock()
-        mock_operation.call_action = MagicMock(side_effect=RuntimeError("fetch failed"))
+        mock_operation.call_action = MagicMock(
+            return_value=Err(
+                OperationError(code="FETCH_FAILED", message="fetch failed")
+            )
+        )
 
-        # Act & Assert
-        with pytest.raises(RuntimeError) as exc_info:
-            datasource.fetch_result(mock_operation, "public", "output")
+        # Act
+        result = datasource.fetch_result(mock_operation, "public", "output")
 
-        assert "Failed to fetch result from public.output" in str(exc_info.value)
+        # Assert
+        assert result.is_err
+        assert isinstance(result.error, DataFetchFailure)
