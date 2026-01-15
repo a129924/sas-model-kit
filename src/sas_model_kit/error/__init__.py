@@ -2,7 +2,7 @@
 
 from .base import BaseError, ErrorProtocol, ErrorSeverity
 from .datasource import DataFetchFailure, UploadFailure
-from .operation import OperationError
+from .operation import OperationError, OperationErrorCode, TableNotFoundError
 from .parameter import (
     ConflictingRuleFailure,
     InvalidTypeFailure,
@@ -20,6 +20,8 @@ __all__ = [
     "ErrorProtocol",
     "ErrorSeverity",
     "OperationError",
+    "OperationErrorCode",
+    "TableNotFoundError",
     "UploadFailure",
     "DataFetchFailure",
     "TransformationFailure",

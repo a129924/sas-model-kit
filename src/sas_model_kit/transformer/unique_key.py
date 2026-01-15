@@ -35,7 +35,7 @@ except ImportError as e:
 
 from typing_extensions import override
 
-from sas_model_kit.error import DuplicateKeyError, OperationError
+from sas_model_kit.error import DuplicateKeyError, OperationError, OperationErrorCode
 from sas_model_kit.result import Err, Ok, UniqueKeyExecutionResult
 
 from .protocol import CASTableTransformer
@@ -151,9 +151,8 @@ class AddUniqueKeyTransformer(CASTableTransformer):
         if hasattr(result, "status") and result.status:
             return Err(
                 OperationError(
-                    code="DATASTEP_FAILED",
+                    code=OperationErrorCode.SWAT_EXECUTION_ERROR,
                     message=f"DATA step failed with status: {result.status}",
-                    context={"status": result.status},
                 )
             )
 

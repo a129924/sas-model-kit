@@ -83,11 +83,9 @@ class CASTableDataSource(DataSourceProtocol[pd.DataFrame]):
     def _to_upload_failure(error: OperationError) -> UploadFailure:
         """Convert OperationError to UploadFailure."""
         return UploadFailure(
-            code=error.code,
+            code=str(error.code.value),
             message=error.message,
-            severity=error.severity,
             cause=error.cause,
-            context=error.context,
         )
 
     def _validate_table_exists(self, exists: bool) -> Result[None, UploadFailure]:
@@ -114,32 +112,21 @@ class CASTableDataSource(DataSourceProtocol[pd.DataFrame]):
             .and_then(self._validate_table_exists)
         )
 
-    @override
-    def fetch_result(
-        self, operation: OperationProtocol, caslib: str, table: str
-    ) -> Result[pd.DataFrame, DataFetchFailure]:
-        """Fetch results from CAS as DataFrame and return Result."""
-
-        def _to_fetch_failure(error: OperationError) -> DataFetchFailure:
-            return DataFetchFailure(
-                code=error.code,
-                message=error.message,
-                severity=error.severity,
-                cause=error.cause,
-                context=error.context,
-            )
-
-        action_result = operation.call_action(
-            "table.fetch", table={"name": table, "caslib": caslib}
+    def _to_fetch_failure(self, error: OperationError) -> DataFetchFailure:
+        return DataFetchFailure(
+            code=str(error.code.value),
+            message=error.message,
+            cause=error.cause,
         )
 
-        if action_result.is_err:
-            return Err(_to_fetch_failure(action_result.error))
-
-        result = action_result.value
-
-        if hasattr(result, "__getitem__") and "Fetch" in result:
-            df = result["Fetch"]
+    def _to_fetch_success(
+        self, action_result: CASResults, caslib: str, table: str
+    ) -> Result[pd.DataFrame, DataFetchFailure]:
+        if (
+            hasattr(action_result.value, "__getitem__")
+            and "Fetch" in action_result.value
+        ):
+            df = action_result.value["Fetch"]
 
             if not isinstance(df, pd.DataFrame):
                 return Err(
@@ -153,14 +140,31 @@ class CASTableDataSource(DataSourceProtocol[pd.DataFrame]):
                 )
 
             return Ok(df)
-
         return Err(
             DataFetchFailure(
                 code="FETCH_RESULT_FORMAT_INVALID",
-                message=f"Unexpected result format from table.fetch: {type(result)}",
+                message=f"Unexpected result format from table.fetch: {type(action_result.value)}",
                 context={"caslib": caslib, "table": table},
             )
         )
+
+    @override
+    def fetch_result(
+        self, operation: OperationProtocol, caslib: str, table: str
+    ) -> Result[pd.DataFrame, DataFetchFailure]:
+        """Fetch results from CAS as DataFrame and return Result."""
+
+        action_result = operation.call_action(
+            "table.fetch", table={"name": table, "caslib": caslib}
+        )
+
+        match action_result:
+            case Err():
+                return Err(self._to_fetch_failure(action_result.error))
+            case Ok():
+                return self._to_fetch_success(action_result.value, caslib, table)
+            case _:
+                raise RuntimeError("Unreachable code reached in fetch_result")
 
     @property
     def caslib(self) -> str:

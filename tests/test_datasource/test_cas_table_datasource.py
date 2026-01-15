@@ -15,7 +15,12 @@ import pandas as pd
 import pytest
 
 from sas_model_kit.datasource.cas_table import CASTableDataSource
-from sas_model_kit.error import DataFetchFailure, OperationError, UploadFailure
+from sas_model_kit.error import (
+    DataFetchFailure,
+    OperationError,
+    OperationErrorCode,
+    UploadFailure,
+)
 from sas_model_kit.result import Err, Ok
 
 
@@ -105,7 +110,7 @@ class TestCASTableDataSourcePrepare:
         mock_operation.table_exists = MagicMock(
             return_value=Err(
                 OperationError(
-                    code="TABLE_CHECK_FAILED", message="Failed to check table"
+                    code=OperationErrorCode.READ_FAILED, message="Failed to check table"
                 )
             )
         )
@@ -124,10 +129,8 @@ class TestCASTableDataSourcePrepare:
 
         mock_operation = MagicMock()
         op_error = OperationError(
-            code="ACTION_FAILED",
+            code=OperationErrorCode.SWAT_EXECUTION_ERROR,
             message="action failed",
-            severity="ERROR",
-            context={"details": "test error"},
         )
         mock_operation.table_exists = MagicMock(return_value=Err(op_error))
 
@@ -137,7 +140,9 @@ class TestCASTableDataSourcePrepare:
         # Assert
         assert result.is_err
         assert isinstance(result.error, UploadFailure)
-        assert result.error.code == "ACTION_FAILED"
+        assert (
+            result.error.code == "SWAT_EXECUTION_ERROR"
+        )  # Code from OperationErrorCode Enum
         assert result.error.message == "action failed"
 
 
@@ -211,7 +216,9 @@ class TestCASTableDataSourceFetchResult:
         mock_operation = MagicMock()
         mock_operation.call_action = MagicMock(
             return_value=Err(
-                OperationError(code="FETCH_FAILED", message="fetch failed")
+                OperationError(
+                    code=OperationErrorCode.READ_FAILED, message="fetch failed"
+                )
             )
         )
 

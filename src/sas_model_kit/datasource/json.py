@@ -101,11 +101,9 @@ class JSONDataSource(DataSourceProtocol[dict[str, Any] | list[dict[str, Any]]]):
 
         def _to_upload_failure(error: OperationError) -> UploadFailure:
             return UploadFailure(
-                code=error.code,
+                code=str(error.code.value),
                 message=error.message,
-                severity=error.severity,
                 cause=error.cause,
-                context=error.context,
             )
 
         upload_data = (
@@ -126,11 +124,9 @@ class JSONDataSource(DataSourceProtocol[dict[str, Any] | list[dict[str, Any]]]):
 
         def _to_fetch_failure(error: OperationError) -> DataFetchFailure:
             return DataFetchFailure(
-                code=error.code,
+                code=str(error.code.value),
                 message=error.message,
-                severity=error.severity,
                 cause=error.cause,
-                context=error.context,
             )
 
         action_result = operation.call_action(

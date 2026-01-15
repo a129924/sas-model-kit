@@ -14,7 +14,12 @@ import pandas as pd
 import pytest
 
 from sas_model_kit.datasource.dataframe import DataFrameDataSource
-from sas_model_kit.error import DataFetchFailure, OperationError, UploadFailure
+from sas_model_kit.error import (
+    DataFetchFailure,
+    OperationError,
+    OperationErrorCode,
+    UploadFailure,
+)
 from sas_model_kit.result import Err, Ok
 
 
@@ -111,7 +116,9 @@ class TestDataFrameDataSourcePrepare:
         mock_operation = MagicMock()
         mock_operation.upload_data = MagicMock(
             return_value=Err(
-                OperationError(code="UPLOAD_FAILED", message="upload failed")
+                OperationError(
+                    code=OperationErrorCode.WRITE_FAILED, message="upload failed"
+                )
             )
         )
 
@@ -197,7 +204,9 @@ class TestDataFrameDataSourceFetchResult:
         mock_operation = MagicMock()
         mock_operation.call_action = MagicMock(
             return_value=Err(
-                OperationError(code="FETCH_FAILED", message="fetch failed")
+                OperationError(
+                    code=OperationErrorCode.READ_FAILED, message="fetch failed"
+                )
             )
         )
 

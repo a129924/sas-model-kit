@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from sas_model_kit.error import DuplicateKeyError, OperationError
+from sas_model_kit.error import DuplicateKeyError, OperationError, OperationErrorCode
 from sas_model_kit.result import Err, Ok
 from sas_model_kit.transformer.unique_key import AddUniqueKeyTransformer
 
@@ -102,7 +102,7 @@ def test_unique_key_execution_failure_raises(mock_operation, mock_table) -> None
     """Test that operation failure raises TransformationError."""
     transformer = AddUniqueKeyTransformer(mock_operation)
     mock_operation.call_action.return_value = Err(
-        OperationError(code="CAS_ERROR", message="CAS error")
+        OperationError(code=OperationErrorCode.UNKNOWN, message="CAS error")
     )
 
     result = transformer.execute(mock_table)

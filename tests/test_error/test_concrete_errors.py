@@ -8,6 +8,7 @@ from sas_model_kit.error import (
     InvalidTypeFailure,
     MissingFieldFailure,
     OperationError,
+    OperationErrorCode,
     SortError,
     TransformationFailure,
     UploadFailure,
@@ -16,8 +17,11 @@ from sas_model_kit.error import (
 
 
 def test_operation_error_inherits_base() -> None:
-    err = OperationError(code="OP001", message="operation failed")
-    assert isinstance(err, BaseError)
+    # Phase 5: OperationError now inherits Exception, not BaseError
+    # Uses OperationErrorCode Enum instead of string
+    err = OperationError(code=OperationErrorCode.UNKNOWN, message="operation failed")
+    assert isinstance(err, Exception)
+    assert err.code == OperationErrorCode.UNKNOWN
 
 
 def test_datasource_errors_inherit_base() -> None:
