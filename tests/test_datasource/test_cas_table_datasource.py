@@ -171,8 +171,8 @@ class TestCASTableDataSourceFetchResult:
             "table.fetch", table={"name": "output", "caslib": "public"}
         )
         assert result.is_ok
-        assert isinstance(result.value, pd.DataFrame)
-        assert result.value is result_df
+        assert isinstance(result.unwrap(), pd.DataFrame)
+        assert result.unwrap() is result_df
 
     def test_fetch_result_with_missing_fetch_key(self):
         """Should raise ValueError when result has no 'Fetch' key."""

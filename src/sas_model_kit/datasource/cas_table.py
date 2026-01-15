@@ -16,6 +16,7 @@ from sas_model_kit.result import Err, Ok, Result
 
 
 class CASTableDataSource(DataSourceProtocol[pd.DataFrame]):
+    # FIXME: 處理Library Entity 要在Able 處理 我這邊不能處理 這些專屬特定框架的邏輯不應該在這裡處理
     """
     Data source for existing CAS tables.
 
@@ -75,10 +76,6 @@ class CASTableDataSource(DataSourceProtocol[pd.DataFrame]):
         self._caslib = caslib
         self._table = table
 
-    def _process_success(self, result: CASResults):
-        """Process successful CASResults (placeholder)."""
-        pass
-
     @staticmethod
     def _to_upload_failure(error: OperationError) -> UploadFailure:
         """Convert OperationError to UploadFailure."""
@@ -120,13 +117,12 @@ class CASTableDataSource(DataSourceProtocol[pd.DataFrame]):
         )
 
     def _to_fetch_success(
-        self, action_result: CASResults, caslib: str, table: str
+        self, cas_result: CASResults, caslib: str, table: str
     ) -> Result[pd.DataFrame, DataFetchFailure]:
-        if (
-            hasattr(action_result.value, "__getitem__")
-            and "Fetch" in action_result.value
-        ):
-            df = action_result.value["Fetch"]
+        # TODO: 處理Library Entity 要在Able 處理 我這邊不能處理
+
+        if hasattr(cas_result, "__getitem__") and "Fetch" in cas_result:
+            df = cas_result["Fetch"]  # type: ignore
 
             if not isinstance(df, pd.DataFrame):
                 return Err(
@@ -140,10 +136,13 @@ class CASTableDataSource(DataSourceProtocol[pd.DataFrame]):
                 )
 
             return Ok(df)
+
+        unpack_type = ", ".join(type(v).__name__ for v in cas_result.values())
+
         return Err(
             DataFetchFailure(
                 code="FETCH_RESULT_FORMAT_INVALID",
-                message=f"Unexpected result format from table.fetch: {type(action_result.value)}",
+                message=f"Unexpected result format from table.fetch: {unpack_type}",
                 context={"caslib": caslib, "table": table},
             )
         )
