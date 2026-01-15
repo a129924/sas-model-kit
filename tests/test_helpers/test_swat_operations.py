@@ -2,7 +2,16 @@
 
 from unittest.mock import MagicMock, Mock, PropertyMock
 
-from sas_model_kit.error import OperationError, OperationErrorCode, TableNotFoundError
+import pytest
+
+from sas_model_kit.error import (
+    DataErrorCode,
+    InvalidDataError,
+    OperationError,
+    OperationErrorCode,
+    SchemaMismatchError,
+    TableNotFoundError,
+)
 from sas_model_kit.helpers.swat.action_processor import SWATActionProcessor
 from sas_model_kit.helpers.swat.table_lifecycle import SWATTableLifecycle
 from sas_model_kit.helpers.swat.table_metadata import SWATTableMetadata
@@ -266,23 +275,28 @@ class TestSWATTableTransformSortAble:
         result = ops.sort_values(table, by=["invalid_col"])
 
         assert result.is_err
-        assert isinstance(result.error, OperationError)
-        assert result.error.code == OperationErrorCode.SORT_FAILED
+        assert isinstance(result.error, InvalidDataError)
+        assert result.error.code == DataErrorCode.INVALID_DATA
         assert result.error.__cause__ is sort_error
 
 
 class TestSWATTableTransformConcatAble:
     """Test ConcatAble implementation."""
 
-    def test_concat_tables_success(self):
+    def test_concat_tables_success(self, monkeypatch):
         operation = Mock()
-        operation.call_action = Mock(return_value=Ok({"status": "OK"}))
-        operation._session = Mock()
-        result_table = Mock()
-        operation._session.CASTable = Mock(return_value=result_table)
-
         ops = SWATTableTransform(operation)
         input_tables = [Mock(), Mock()]
+        result_table = Mock()
+
+        def fake_concat(inputs, caslib, name, replace):
+            assert inputs == input_tables
+            assert caslib == "mycaslib"
+            assert name == "concatenated"
+            assert replace is True
+            return result_table
+
+        monkeypatch.setattr("swat.functions.concat", fake_concat)
 
         result = ops.concat_tables(
             inputs=input_tables,
@@ -293,25 +307,17 @@ class TestSWATTableTransformConcatAble:
 
         assert result.is_ok
         assert result.value is result_table
-        operation.call_action.assert_called_once_with(
-            "table.concat",
-            casout={"name": "concatenated", "caslib": "mycaslib", "replace": True},
-            inputs=input_tables,
-        )
-        operation._session.CASTable.assert_called_once_with(
-            name="concatenated",
-            caslib="mycaslib",
-        )
 
-    def test_concat_tables_error(self):
+    def test_concat_tables_error(self, monkeypatch):
         operation = Mock()
-        concat_error = OperationError(
-            code=OperationErrorCode.SWAT_EXECUTION_ERROR,
-            message="Concat failed",
-        )
-        operation.call_action = Mock(return_value=Err(concat_error))
-
         ops = SWATTableTransform(operation)
+
+        from swat.exceptions import SWATError
+
+        def fake_concat(*_args, **_kwargs):
+            raise SWATError("Concat failed")
+
+        monkeypatch.setattr("swat.functions.concat", fake_concat)
 
         result = ops.concat_tables(
             inputs=[Mock()],
@@ -320,7 +326,7 @@ class TestSWATTableTransformConcatAble:
         )
 
         assert result.is_err
-        assert result.error is concat_error
+        assert isinstance(result.error, SchemaMismatchError)
 
 
 class TestSWATActionProcessorActionExecutable:

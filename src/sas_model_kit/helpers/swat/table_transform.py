@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from typing_extensions import override
 from swat.exceptions import SWATError
 
-from sas_model_kit.error import OperationError, OperationErrorCode
-from sas_model_kit.error.operation import ConcatTableError
-from sas_model_kit.error.transformer import SortError
+from sas_model_kit.error import DataError, InvalidDataError, SchemaMismatchError
 from sas_model_kit.helpers.protocols import ConcatAble, SortAble
 from sas_model_kit.helpers.swat.types import SwatTableT
 from sas_model_kit.result import Err, Ok, Result
@@ -30,7 +28,7 @@ class SWATTableTransform(SortAble[SwatTableT], ConcatAble[SwatTableT]):
         table: SwatTableT,
         by: list[str],
         ascending: bool | list[bool] = True,
-    ) -> Result[SwatTableT, OperationError]:
+    ) -> Result[SwatTableT, DataError]:
         """
         Sort table by specified columns.
 
@@ -39,10 +37,11 @@ class SWATTableTransform(SortAble[SwatTableT], ConcatAble[SwatTableT]):
             sorted_table = table.sort_values(by=by, ascending=ascending)
             return Ok(sorted_table)
         except Exception as e:
-            return OperationError(
-                code=OperationErrorCode.SWAT_EXECUTION_ERROR,
-                message=f"Failed to sort table by {by}: {e}",
-                cause=e,
+            return Err(
+                InvalidDataError(
+                    message=f"Failed to sort table by {by}: {e}",
+                    cause=e,
+                )
             )
 
     @override
@@ -52,7 +51,7 @@ class SWATTableTransform(SortAble[SwatTableT], ConcatAble[SwatTableT]):
         caslib: str,
         output_table: str,
         replace: bool = True,
-    ) -> Result[SwatTableT, ConcatTableError | OperationError]:
+    ) -> Result[SwatTableT, DataError]:
         """Concatenate multiple tables into one."""
         from swat.functions import concat
 
@@ -65,15 +64,14 @@ class SWATTableTransform(SortAble[SwatTableT], ConcatAble[SwatTableT]):
             return Ok(concatenated_table)
         except SWATError as swat_err:
             return Err(
-                ConcatTableError(
+                SchemaMismatchError(
                     message=f"Failed to concatenate tables into '{output_table}': {swat_err}",
                     cause=swat_err,
                 )
             )
         except Exception as e:
             return Err(
-                OperationError(
-                    code=OperationErrorCode.SWAT_EXECUTION_ERROR,
+                InvalidDataError(
                     message=f"Unknown error concatenating tables into '{output_table}': {e}",
                     cause=e,
                 )

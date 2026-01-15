@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
-from sas_model_kit.error import OperationError, TableNotFoundError
+from sas_model_kit.error import DataError, OperationError, TableNotFoundError
 from sas_model_kit.result import Result
 
 if TYPE_CHECKING:
@@ -124,7 +124,7 @@ class SortAble(Protocol[T]):
         table: T,
         by: list[str],
         ascending: bool | list[bool] = True,
-    ) -> Result[T, OperationError]:
+    ) -> Result[T, DataError | OperationError]:
         """Sort table by specified columns.
 
         Args:
@@ -134,7 +134,7 @@ class SortAble(Protocol[T]):
 
         Returns:
             Ok(CASTable): Reference to sorted table
-            Err(OperationError): Failed to sort table
+            Err(DataError | OperationError): Failed to sort table
         """
         ...
 
@@ -181,7 +181,7 @@ class ConcatAble(Protocol[T]):
         caslib: str,
         output_table: str,
         replace: bool = True,
-    ) -> Result[T, OperationError]:
+    ) -> Result[T, DataError | OperationError]:
         """Concatenate multiple tables into one.
 
         Args:
@@ -192,7 +192,7 @@ class ConcatAble(Protocol[T]):
 
         Returns:
             Ok(CASTable): Reference to concatenated table
-            Err(OperationError): Failed to concatenate tables
+            Err(DataError | OperationError): Failed to concatenate tables
         """
         ...
 
