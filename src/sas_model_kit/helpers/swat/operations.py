@@ -26,7 +26,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from sas_model_kit.error import OperationError, OperationErrorCode, TableNotFoundError
-from sas_model_kit.helpers import T
+from sas_model_kit.helpers.swat.types import SwatTableT
 from sas_model_kit.result import Err, Ok, Result
 
 if TYPE_CHECKING:
@@ -248,7 +248,9 @@ class SWATOperationsImpl:
 
     # ========== ValidateAble Implementation ==========
 
-    def ensure_exists(self, library_table: T) -> Result[T, TableNotFoundError]:
+    def ensure_exists(
+        self, library_table: SwatTableT
+    ) -> Result[SwatTableT, TableNotFoundError]:
         """Validate CAS table exists using native exists() method.
 
         Uses swat.CASTable.exists() native API directly to check table existence.
@@ -258,7 +260,7 @@ class SWATOperationsImpl:
             library_table: CASTable object to validate
 
         Returns:
-            Ok(T): Table exists, returns same library_table object
+            Ok(SwatTableT): Table exists, returns same library_table object
             Err(TableNotFoundError): Table not found or validation failed
         """
         try:

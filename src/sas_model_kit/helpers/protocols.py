@@ -18,7 +18,7 @@ Design Principles:
     - Single Responsibility: Each protocol has one capability
     - Interface Segregation: Depend only on what you need
     - Dependency Inversion: Depend on abstractions, not implementations
-    - Type Safety: Generic type T bound to swat.CASTable
+    - Type Safety: Generic type T (framework-agnostic)
 
 Usage Example:
     >>> # Transformer depends only on SortAble
@@ -32,14 +32,15 @@ Usage Example:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 from sas_model_kit.error import OperationError, TableNotFoundError
-from sas_model_kit.helpers import T
 from sas_model_kit.result import Result
 
 if TYPE_CHECKING:
     from sas_model_kit.operation import OperationProtocol
+
+T = TypeVar("T")
 
 
 class ReadAble(Protocol[T]):
@@ -204,7 +205,7 @@ class ValidateAble(Protocol[T]):
     library_table and returns the same object after validation.
 
     Type Parameter:
-        T: TypeVar bound to swat.CASTable for type safety
+        T: Table type that provides a native ``exists()`` method
 
     Design Advantages:
         - Zero conversion cost: No unpacking/repacking of parameters
