@@ -77,5 +77,33 @@ class SWATTableMetadata(ReadAble[SwatTableT], ValidateAble[SwatTableT]):
                 )
             )
 
+    @override
+    def ensure_columns_exist(
+        self, table: SwatTableT, required_columns: list[str]
+    ) -> Result[SwatTableT, OperationError]:
+        """Validate that required columns exist on table.
+
+        Returns Ok(table) if all required columns are present; otherwise Err(OperationError).
+        """
+        try:
+            cols = set(map(str, table.columns))  # type: ignore
+            missing = [c for c in required_columns if str(c) not in cols]
+            if missing:
+                return Err(
+                    OperationError(
+                        code=OperationErrorCode.READ_FAILED,
+                        message=f"Missing required columns: {missing}",
+                    )
+                )
+            return Ok(table)
+        except Exception as e:
+            return Err(
+                OperationError(
+                    code=OperationErrorCode.READ_FAILED,
+                    message=f"Failed to validate columns {required_columns}: {e}",
+                    cause=e,
+                )
+            )
+
 
 __all__ = ["SWATTableMetadata"]

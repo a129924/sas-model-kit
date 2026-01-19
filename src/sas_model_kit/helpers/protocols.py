@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
-from sas_model_kit.error import DataError, OperationError, TableNotFoundError
+from sas_model_kit.error import OperationError, TableNotFoundError
 from sas_model_kit.result import Result
 
 if TYPE_CHECKING:
@@ -124,7 +124,7 @@ class SortAble(Protocol[T]):
         table: T,
         by: list[str],
         ascending: bool | list[bool] = True,
-    ) -> Result[T, DataError | OperationError]:
+    ) -> Result[T, OperationError]:
         """Sort table by specified columns.
 
         Args:
@@ -134,7 +134,7 @@ class SortAble(Protocol[T]):
 
         Returns:
             Ok(CASTable): Reference to sorted table
-            Err(DataError | OperationError): Failed to sort table
+            Err(OperationError): Failed to sort table
         """
         ...
 
@@ -181,7 +181,7 @@ class ConcatAble(Protocol[T]):
         caslib: str,
         output_table: str,
         replace: bool = True,
-    ) -> Result[T, DataError | OperationError]:
+    ) -> Result[T, OperationError]:
         """Concatenate multiple tables into one.
 
         Args:
@@ -192,7 +192,7 @@ class ConcatAble(Protocol[T]):
 
         Returns:
             Ok(CASTable): Reference to concatenated table
-            Err(DataError | OperationError): Failed to concatenate tables
+            Err(OperationError): Failed to concatenate tables
         """
         ...
 
@@ -215,6 +215,7 @@ class ValidateAble(Protocol[T]):
 
     Methods:
         ensure_exists: Validate table exists, return same object
+        ensure_columns_exist: Validate required columns exist
     """
 
     operation: OperationProtocol  # Reserved for future use
@@ -244,6 +245,23 @@ class ValidateAble(Protocol[T]):
             ...     case Err(TableNotFoundError()):
             ...         # Handle missing table
             ...         create_table()
+        """
+        ...
+
+    def ensure_columns_exist(
+        self,
+        table: T,
+        required_columns: list[str],
+    ) -> Result[T, OperationError]:
+        """Validate that required columns exist on table.
+
+        Args:
+            table: Table to validate
+            required_columns: Column names that must exist
+
+        Returns:
+            Ok(T): Table is unchanged if validation passes
+            Err(OperationError): Missing columns or validation failed
         """
         ...
 

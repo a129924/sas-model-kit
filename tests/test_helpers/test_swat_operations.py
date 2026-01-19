@@ -5,11 +5,8 @@ from unittest.mock import MagicMock, Mock, PropertyMock
 import pytest
 
 from sas_model_kit.error import (
-    DataErrorCode,
-    InvalidDataError,
     OperationError,
     OperationErrorCode,
-    SchemaMismatchError,
     TableNotFoundError,
 )
 from sas_model_kit.helpers.swat.action_processor import SWATActionProcessor
@@ -275,8 +272,8 @@ class TestSWATTableTransformSortAble:
         result = ops.sort_values(table, by=["invalid_col"])
 
         assert result.is_err
-        assert isinstance(result.error, InvalidDataError)
-        assert result.error.code == DataErrorCode.INVALID_DATA
+        assert isinstance(result.error, OperationError)
+        assert result.error.code == OperationErrorCode.SORT_FAILED
         assert result.error.__cause__ is sort_error
 
 
@@ -326,7 +323,8 @@ class TestSWATTableTransformConcatAble:
         )
 
         assert result.is_err
-        assert isinstance(result.error, SchemaMismatchError)
+        assert isinstance(result.error, OperationError)
+        assert result.error.code == OperationErrorCode.WRITE_FAILED
 
 
 class TestSWATActionProcessorActionExecutable:

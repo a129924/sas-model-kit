@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from typing_extensions import override
 from swat.exceptions import SWATError
+from typing_extensions import override
 
-from sas_model_kit.error import DataError, InvalidDataError, SchemaMismatchError
+from sas_model_kit.error import OperationError, OperationErrorCode
 from sas_model_kit.helpers.protocols import ConcatAble, SortAble
 from sas_model_kit.helpers.swat.types import SwatTableT
 from sas_model_kit.result import Err, Ok, Result
@@ -15,8 +15,15 @@ from sas_model_kit.result import Err, Ok, Result
 if TYPE_CHECKING:
     from sas_model_kit.operation import OperationProtocol
 
+try:
+    from swat.cas.table import CASTable
+except ImportError:
+    raise ImportError(
+        "SWAT is required for SWATTableTransform. Please install SWAT to use this feature."
+    ) from ImportError
 
-class SWATTableTransform(SortAble[SwatTableT], ConcatAble[SwatTableT]):
+
+class SWATTableTransform(SortAble[CASTable], ConcatAble[CASTable]):
     """SWAT adapter for table sorting and concatenation."""
 
     def __init__(self, operation: OperationProtocol) -> None:
@@ -25,20 +32,21 @@ class SWATTableTransform(SortAble[SwatTableT], ConcatAble[SwatTableT]):
     @override
     def sort_values(
         self,
-        table: SwatTableT,
+        table: CASTable,
         by: list[str],
         ascending: bool | list[bool] = True,
-    ) -> Result[SwatTableT, DataError]:
+    ) -> Result[CASTable, OperationError]:
         """
         Sort table by specified columns.
 
         """
         try:
-            sorted_table = table.sort_values(by=by, ascending=ascending)
+            sorted_table = cast(CASTable, table.sort_values(by=by, ascending=ascending))  # type: ignore
             return Ok(sorted_table)
         except Exception as e:
             return Err(
-                InvalidDataError(
+                OperationError(
+                    code=OperationErrorCode.SORT_FAILED,
                     message=f"Failed to sort table by {by}: {e}",
                     cause=e,
                 )
@@ -51,7 +59,7 @@ class SWATTableTransform(SortAble[SwatTableT], ConcatAble[SwatTableT]):
         caslib: str,
         output_table: str,
         replace: bool = True,
-    ) -> Result[SwatTableT, DataError]:
+    ) -> Result[SwatTableT, OperationError]:
         """Concatenate multiple tables into one."""
         from swat.functions import concat
 
@@ -64,14 +72,16 @@ class SWATTableTransform(SortAble[SwatTableT], ConcatAble[SwatTableT]):
             return Ok(concatenated_table)
         except SWATError as swat_err:
             return Err(
-                SchemaMismatchError(
+                OperationError(
+                    code=OperationErrorCode.WRITE_FAILED,
                     message=f"Failed to concatenate tables into '{output_table}': {swat_err}",
                     cause=swat_err,
                 )
             )
         except Exception as e:
             return Err(
-                InvalidDataError(
+                OperationError(
+                    code=OperationErrorCode.UNKNOWN,
                     message=f"Unknown error concatenating tables into '{output_table}': {e}",
                     cause=e,
                 )
